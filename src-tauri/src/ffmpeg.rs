@@ -1,0 +1,147 @@
+use std::process::Stdio;
+use tokio::process::Command;
+
+/// Convert m3u8 stream to mp4 using ffmpeg
+pub async fn convert_m3u8_to_mp4(
+    m3u8_url: &str,
+    output_path: &str,
+    jwt: Option<&str>,
+) -> anyhow::Result<()> {
+    // Check if ffmpeg is available
+    if !is_ffmpeg_available().await {
+        return Err(anyhow::anyhow!(
+            "FFmpeg not found. Please install FFmpeg to convert m3u8 videos."
+        ));
+    }
+    
+    let mut cmd = Command::new("ffmpeg");
+    
+    // Add input
+    cmd.arg("-i").arg(m3u8_url);
+    
+    // Add headers if JWT is provided
+    if let Some(token) = jwt {
+        cmd.arg("-headers").arg(format!("Authorization: Bearer {}", token));
+    }
+    
+    // Add conversion options
+    cmd.arg("-c:v").arg("copy")  // Copy video stream without re-encoding
+        .arg("-c:a").arg("copy")  // Copy audio stream without re-encoding
+        .arg("-bsf:a").arg("aac_adtstoasc")  // Fix AAC audio stream
+        .arg("-movflags").arg("+faststart")  // Enable fast start for web playback
+        .arg("-y")  // Overwrite output file
+        .arg(output_path);
+    
+    // Execute command
+    let output = cmd
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow::anyhow!("FFmpeg conversion failed: {}", stderr));
+    }
+    
+    Ok(())
+}
+
+/// Extract audio from video file
+pub async fn extract_audio(
+    video_path: &str,
+    output_path: &str,
+    format: &str,
+) -> anyhow::Result<()> {
+    // Check if ffmpeg is available
+    if !is_ffmpeg_available().await {
+        return Err(anyhow::anyhow!(
+            "FFmpeg not found. Please install FFmpeg to extract audio."
+        ));
+    }
+    
+    // Determine codec based on format
+    let (codec, ext) = match format.to_lowercase().as_str() {
+        "mp3" => ("libmp3lame", "mp3"),
+        "aac" => ("aac", "aac"),
+        "wav" => ("pcm_s16le", "wav"),
+        _ => return Err(anyhow::anyhow!("Unsupported audio format: {}", format)),
+    };
+    
+    // Ensure output path has correct extension
+    let output_path = if !output_path.ends_with(&format!(".{}", ext)) {
+        format!("{}.{}", output_path, ext)
+    } else {
+        output_path.to_string()
+    };
+    
+    let mut cmd = Command::new("ffmpeg");
+    
+    cmd.arg("-i").arg(video_path)
+        .arg("-vn")  // No video
+        .arg("-c:a").arg(codec);
+    
+    // Add format-specific options
+    match format.to_lowercase().as_str() {
+        "mp3" => {
+            cmd.arg("-q:a").arg("2");  // High quality VBR
+        }
+        "aac" => {
+            cmd.arg("-b:a").arg("192k");  // 192kbps bitrate
+        }
+        _ => {}
+    }
+    
+    cmd.arg("-y").arg(&output_path);
+    
+    // Execute command
+    let output = cmd
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow::anyhow!("FFmpeg audio extraction failed: {}", stderr));
+    }
+    
+    Ok(())
+}
+
+/// Check if ffmpeg is available in system PATH
+async fn is_ffmpeg_available() -> bool {
+    Command::new("ffmpeg")
+        .arg("-version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Download and bundle ffmpeg binary (optional enhancement)
+pub async fn ensure_ffmpeg() -> anyhow::Result<String> {
+    // First check if ffmpeg is in PATH
+    if is_ffmpeg_available().await {
+        return Ok("ffmpeg".to_string());
+    }
+    
+    // Check for bundled ffmpeg
+    let bundled_paths = [
+        "./ffmpeg/ffmpeg",
+        "./ffmpeg.exe",
+        "../Resources/ffmpeg",
+    ];
+    
+    for path in &bundled_paths {
+        if tokio::fs::metadata(path).await.is_ok() {
+            return Ok(path.to_string());
+        }
+    }
+    
+    Err(anyhow::anyhow!(
+        "FFmpeg not found. Please install FFmpeg or bundle it with the application."
+    ))
+}

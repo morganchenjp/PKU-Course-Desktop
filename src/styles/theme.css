@@ -1,0 +1,85 @@
+/* PKU Art Desktop - Theme Variables */
+
+:root {
+  /* Common Colors */
+  --pku-red: #9b0000;
+  --pku-red-light: #c41e3a;
+  --pku-red-dark: #6b0000;
+  
+  /* Status Colors */
+  --success-color: #52c41a;
+  --warning-color: #faad14;
+  --error-color: #f5222d;
+  --info-color: #1890ff;
+  
+  /* Danger Colors */
+  --danger-color: #ff4d4f;
+  --danger-hover: #ff7875;
+}
+
+/* Light Theme */
+:root,
+[data-theme="light"] {
+  /* Background Colors */
+  --bg-primary: #f6f8fa;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-input: #ffffff;
+  
+  /* Text Colors */
+  --text-primary: #1f2328;
+  --text-secondary: #656d76;
+  --text-tertiary: #8c959f;
+  
+  /* Border Colors */
+  --border-color: #d0d7de;
+  --border-light: #e6e9ef;
+  
+  /* Accent Colors */
+  --accent-color: #9b0000;
+  --accent-hover: #7a0000;
+  --accent-light: rgba(155, 0, 0, 0.1);
+  
+  /* Scrollbar */
+  --scrollbar-color: #c1c1c1;
+  --scrollbar-hover: #a1a1a1;
+  
+  /* Shadow */
+  --shadow-sm: 0 1px 2px rgba(31, 35, 40, 0.04);
+  --shadow-md: 0 3px 6px rgba(31, 35, 40, 0.08);
+  --shadow-lg: 0 8px 24px rgba(31, 35, 40, 0.12);
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  /* Background Colors */
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-card: #21262d;
+  --bg-hover: rgba(177, 186, 196, 0.08);
+  --bg-input: #0d1117;
+  
+  /* Text Colors */
+  --text-primary: #e6edf3;
+  --text-secondary: #7d8590;
+  --text-tertiary: #6e7681;
+  
+  /* Border Colors */
+  --border-color: #30363d;
+  --border-light: #21262d;
+  
+  /* Accent Colors */
+  --accent-color: #e44c47;
+  --accent-hover: #f06b66;
+  --accent-light: rgba(228, 76, 71, 0.15);
+  
+  /* Scrollbar */
+  --scrollbar-color: #484f58;
+  --scrollbar-hover: #6e7681;
+  
+  /* Shadow */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 3px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
