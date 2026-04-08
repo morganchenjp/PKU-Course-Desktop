@@ -477,14 +477,16 @@ fn destroy_video_view(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Download a video file using WebKitGTK's native `download_uri()` API.
+/// Download a video file using the platform's native webview download API.
 ///
-/// This uses the browser-webview's underlying `webkit2gtk::WebView` to initiate
-/// the download, which means it carries the full session (including httpOnly
-/// cookies like JSESSIONID and BbRouter) that the server requires.
+/// On Linux (WebKitGTK): uses `download_uri()` which carries the full browser
+/// session (including httpOnly cookies like JSESSIONID and BbRouter).
 ///
-/// The command returns immediately after setting up the download.  Progress,
-/// completion and error notifications are delivered via Tauri events:
+/// On macOS/Windows: falls back to reqwest streaming download with the JWT
+/// token already embedded in the URL.
+///
+/// The command returns immediately on Linux.  Progress, completion and error
+/// notifications are delivered via Tauri events:
 ///   - `download-progress`  { taskId, progress, speed, eta }
 ///   - `download-complete`  { taskId }
 ///   - `download-error`     { taskId, error }
@@ -500,10 +502,31 @@ async fn browser_download(
         std::fs::create_dir_all(parent).map_err(|e| format!("mkdir: {e}"))?;
     }
 
-    eprintln!("[browser_download] starting webkit download_uri for {task_id}");
+    eprintln!("[browser_download] starting download for {task_id}");
     eprintln!("[browser_download] url: {url}");
     eprintln!("[browser_download] filepath: {filepath}");
 
+    #[cfg(target_os = "linux")]
+    {
+        browser_download_linux(&app, &task_id, &url, &filepath)?;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        browser_download_fallback(&app, task_id, url, filepath).await?;
+    }
+
+    Ok(())
+}
+
+/// Linux implementation: use WebKitGTK's native `download_uri()`.
+#[cfg(target_os = "linux")]
+fn browser_download_linux(
+    app: &tauri::AppHandle,
+    task_id: &str,
+    url: &str,
+    filepath: &str,
+) -> Result<(), String> {
     let browser = app
         .get_webview("browser-webview")
         .ok_or("Browser webview not found")?;
@@ -514,9 +537,9 @@ async fn browser_download(
     let _ = browser.set_position(tauri::LogicalPosition::new(10000.0, 0.0));
     let _ = browser.show();
 
-    let url_clone = url.clone();
-    let filepath_clone = filepath.clone();
-    let task_id_clone = task_id.clone();
+    let url_clone = url.to_string();
+    let filepath_clone = filepath.to_string();
+    let task_id_clone = task_id.to_string();
     let app_clone = app.clone();
 
     browser
@@ -658,6 +681,112 @@ async fn browser_download(
             }
         })
         .map_err(|e| format!("with_webview: {e}"))?;
+
+    Ok(())
+}
+
+/// Fallback for macOS/Windows: use reqwest with the JWT token in the URL.
+#[cfg(not(target_os = "linux"))]
+async fn browser_download_fallback(
+    app: &tauri::AppHandle,
+    task_id: String,
+    url: String,
+    filepath: String,
+) -> Result<(), String> {
+    use futures::StreamExt;
+    use std::io::Write;
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(600))
+        .build()
+        .map_err(|e| format!("client: {e}"))?;
+
+    let resp = client
+        .get(&url)
+        .header(
+            "User-Agent",
+            "Mozilla/5.0 (compatible; PKUCourseDesktop/0.1)",
+        )
+        .header("Referer", "https://course.pku.edu.cn/")
+        .header("Accept", "*/*")
+        .send()
+        .await
+        .map_err(|e| {
+            let msg = format!("request failed: {e}");
+            eprintln!("[browser_download] {msg}");
+            let _ = app.emit(
+                "download-error",
+                serde_json::json!({ "taskId": task_id, "error": msg }),
+            );
+            msg
+        })?;
+
+    let status = resp.status();
+    eprintln!("[browser_download] response: status={status}");
+
+    if !status.is_success() {
+        let msg = format!("HTTP {status}");
+        let _ = app.emit(
+            "download-error",
+            serde_json::json!({ "taskId": task_id, "error": msg }),
+        );
+        return Err(msg);
+    }
+
+    let total_size = resp.content_length().unwrap_or(0);
+    let mut file =
+        std::fs::File::create(&filepath).map_err(|e| format!("create file: {e}"))?;
+    let mut stream = resp.bytes_stream();
+    let mut downloaded: u64 = 0;
+    let start = std::time::Instant::now();
+    let mut last_emit = std::time::Instant::now();
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("stream: {e}"))?;
+        file.write_all(&chunk).map_err(|e| format!("write: {e}"))?;
+        downloaded += chunk.len() as u64;
+
+        if last_emit.elapsed().as_millis() > 500 {
+            let progress = if total_size > 0 {
+                (downloaded as f64 / total_size as f64) * 100.0
+            } else {
+                -1.0
+            };
+            let elapsed = start.elapsed().as_secs_f64();
+            let speed = if elapsed > 0.0 {
+                downloaded as f64 / elapsed
+            } else {
+                0.0
+            };
+            let eta_str = if total_size > 0 && speed > 0.0 {
+                let remaining = (total_size - downloaded) as f64 / speed;
+                if remaining >= 60.0 {
+                    format!("{:.0}m {:.0}s", remaining / 60.0, remaining % 60.0)
+                } else {
+                    format!("{:.0}s", remaining)
+                }
+            } else {
+                fmt_size(downloaded)
+            };
+            let _ = app.emit(
+                "download-progress",
+                serde_json::json!({
+                    "taskId": task_id,
+                    "progress": progress,
+                    "speed": fmt_speed(speed),
+                    "eta": eta_str,
+                }),
+            );
+            last_emit = std::time::Instant::now();
+        }
+    }
+
+    file.flush().map_err(|e| format!("flush: {e}"))?;
+    let _ = app.emit(
+        "download-complete",
+        serde_json::json!({ "taskId": task_id }),
+    );
+    eprintln!("[browser_download] completed: {task_id} ({downloaded} bytes)");
 
     Ok(())
 }
