@@ -60,8 +60,12 @@
     console.log('[hls-player] PostMessage IPC relay active (top frame)');
 
     // ── Iframe detection & auto-navigation (wrapper pages only) ──
+    // When the browser-webview loads a course.pku.edu.cn wrapper page that
+    // embeds the actual player (onlineroomse.pku.edu.cn/player) in a
+    // cross-origin iframe, navigate the top frame directly to the player URL.
+    // This allows video-detector.js to run on the player page and inject
+    // download buttons.
     if (!_isPlayerPage) {
-      console.log('[hls-player] Not on player page — watching for player iframe to navigate');
       var _navigating = false;
 
       function navigateToPlayer(src) {
@@ -79,7 +83,6 @@
             navigateToPlayer(src);
           }
         }
-        // Also check descendant iframes
         if (node.querySelectorAll) {
           var iframes = node.querySelectorAll('iframe');
           for (var i = 0; i < iframes.length; i++) {
@@ -92,7 +95,6 @@
         }
       }
 
-      // MutationObserver: catch iframes added to the DOM or src attribute changes
       var _iframeObs = new MutationObserver(function (mutations) {
         if (_navigating) return;
         for (var m = 0; m < mutations.length; m++) {
@@ -120,7 +122,6 @@
         });
       }
 
-      // Polling fallback: check every 500ms for up to 30 seconds
       var _pollTimer = setInterval(function () {
         if (_navigating) { clearInterval(_pollTimer); return; }
         var iframes = document.querySelectorAll('iframe');

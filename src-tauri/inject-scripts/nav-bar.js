@@ -277,9 +277,9 @@
       }
 
       if (isVideoUrl(resolved)) {
-        // Open video in app's video-webview with hls.js support
-        ipcSend('open-video', { url: resolved });
-        console.log('[nav-bar] Video link opened in video-webview:', resolved);
+        // Navigate in-place — browser-webview now has hls.js for playback
+        window.location.href = resolved;
+        console.log('[nav-bar] Video link navigated in-place:', resolved);
       } else {
         // Non-video links navigate in-place
         window.location.href = resolved;
@@ -300,8 +300,8 @@
       }
 
       if (isVideoUrl(resolved)) {
-        ipcSend('open-video', { url: resolved });
-        console.log('[nav-bar] window.open video → video-webview:', resolved);
+        window.location.href = resolved;
+        console.log('[nav-bar] window.open video navigated in-place:', resolved);
       } else {
         window.location.href = resolved;
       }

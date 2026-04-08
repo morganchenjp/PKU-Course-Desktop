@@ -5,14 +5,12 @@
   import BrowserView from "./components/BrowserView.svelte";
   import DownloadPanel from "./components/DownloadPanel.svelte";
   import SettingsPanel from "./components/SettingsPanel.svelte";
-  import VideoView from "./components/VideoView.svelte";
-  import { currentView, theme, downloadTasks, videoUrl } from "./lib/store";
+  import { currentView, theme, downloadTasks } from "./lib/store";
   import { initTheme } from "./lib/theme";
   import { createDownloadTask } from "./lib/download-utils";
 
   let unlistenSwitchToMain: (() => void) | null = null;
   let unlistenAddDownload: (() => void) | null = null;
-  let unlistenSwitchToVideo: (() => void) | null = null;
   let unlistenDlProgress: (() => void) | null = null;
   let unlistenDlComplete: (() => void) | null = null;
   let unlistenDlError: (() => void) | null = null;
@@ -47,18 +45,6 @@
       } catch (e) {
         console.error('[App] Failed to add/start download task:', e);
       }
-    });
-
-    // Listen for video-open events from the Rust IPC handler.
-    // When nav-bar.js sends open-video, Rust creates/navigates the video-webview
-    // and emits this event so Svelte switches to the video tab.
-    unlistenSwitchToVideo = await listen("switch-to-video", (event: any) => {
-      const url = event.payload?.url;
-      if (url) {
-        videoUrl.set(url);
-      }
-      currentView.set('video');
-      console.log('[App] Switched to video tab:', url);
     });
 
     // Listen for download progress/completion/error events from Rust
@@ -99,7 +85,6 @@
   onDestroy(() => {
     if (unlistenSwitchToMain) unlistenSwitchToMain();
     if (unlistenAddDownload) unlistenAddDownload();
-    if (unlistenSwitchToVideo) unlistenSwitchToVideo();
     if (unlistenDlProgress) unlistenDlProgress();
     if (unlistenDlComplete) unlistenDlComplete();
     if (unlistenDlError) unlistenDlError();
@@ -114,29 +99,21 @@
     currentView.set('browser');
   }
 
-  async function switchToVideo() {
-    const url = $videoUrl;
-    if (url) {
-      try {
-        await invoke('create_video_view', { url });
-      } catch (e) {
-        console.error('[App] create_video_view failed:', e);
-      }
-    }
-    currentView.set('video');
-  }
-
   async function switchToDownloads() {
     try {
-      await invoke('destroy_video_view');
-    } catch (_) { /* may already be destroyed */ }
+      await invoke('show_main_view', { view: 'downloads' });
+    } catch (e) {
+      console.error('[App] show_main_view failed:', e);
+    }
     currentView.set('downloads');
   }
 
   async function switchToSettings() {
     try {
-      await invoke('destroy_video_view');
-    } catch (_) { /* may already be destroyed */ }
+      await invoke('show_main_view', { view: 'settings' });
+    } catch (e) {
+      console.error('[App] show_main_view failed:', e);
+    }
     currentView.set('settings');
   }
 </script>
@@ -154,13 +131,6 @@
         onclick={switchToBrowser}
       >
         浏览器
-      </button>
-      <button 
-        class="nav-tab" 
-        class:active={$currentView === 'video'}
-        onclick={switchToVideo}
-      >
-        在线视频
       </button>
       <button 
         class="nav-tab" 
@@ -187,8 +157,6 @@
   <main class="app-main">
     {#if $currentView === 'browser'}
       <BrowserView />
-    {:else if $currentView === 'video'}
-      <VideoView />
     {:else if $currentView === 'downloads'}
       <DownloadPanel />
     {:else if $currentView === 'settings'}

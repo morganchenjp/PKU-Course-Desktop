@@ -142,13 +142,22 @@
       <h3 class="section-title">关于</h3>
       <div class="about-content">
         <p><strong>PKU Course Desktop</strong></p>
-        <p>版本: 0.1.0</p>
-        <p>基于 Tauri 构建的北大课程视频下载工具</p>
+        <p>版本: 0.2.0</p>
+        <p>开源北大课程视频下载工具 <a href="https://github.com/morganchenjp/PKU-Course-Desktop/" onclick={(e) => { e.preventDefault(); invoke('open_external_link', { url: 'https://github.com/morganchenjp/PKU-Course-Desktop/' }); }}>
+            GitHub</p>
         <p>
-          <a href="https://github.com/zhuozhiyongde/PKU-Art" onclick={(e) => { e.preventDefault(); invoke('open_external_link', { url: 'https://github.com/zhuozhiyongde/PKU-Art' }); }}>
-            GitHub 仓库
+          Inspired by <a href="https://github.com/zhuozhiyongde/PKU-Art" onclick={(e) => { e.preventDefault(); invoke('open_external_link', { url: 'https://github.com/zhuozhiyongde/PKU-Art' }); }}>
+            PKU-Art project
           </a>
         </p>
+      </div>
+    </section>
+
+    <section class="setting-section">
+      <h3 class="section-title">Donation</h3>
+      <div class="about-content donation-section">
+        <p>Buy me a coffee via WeChat Pay</p>
+        <img class="qrcode-img" src="/morgan-wechat-qrcode.png" alt="WeChat Pay QR Code" />
       </div>
     </section>
   </div>
@@ -260,6 +269,19 @@
   
   .about-content a:hover {
     text-decoration: underline;
+  }
+
+  .donation-section {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .qrcode-img {
+    width: 200px;
+    height: auto;
+    border-radius: 8px;
   }
   
   .settings-footer {

@@ -13,7 +13,6 @@ use tokio::sync::Mutex;
 use url::Url;
 
 const START_URL: &str = "https://course.pku.edu.cn";
-const HEADER_HEIGHT: f64 = 48.0;
 
 use std::collections::HashMap;
 
@@ -28,15 +27,8 @@ pub struct AppState {
     download_manager: Mutex<DownloadManager>,
     settings: Mutex<AppSettings>,
     /// Tracks which view mode is active so the resize handler can reposition webviews.
-    /// Values: "browser", "video", "main"
+    /// Values: "browser", "main"
     current_view_mode: StdMutex<String>,
-    /// URL currently loaded in the video-webview (empty = no video).
-    /// Used for idempotent create: if the same URL is requested, just ensure layout.
-    video_url: StdMutex<String>,
-    /// Last captured video info from video-detector.js (via /video-info IPC).
-    /// Embedded into the video-webview so floating download buttons can be shown
-    /// without depending on cross-origin iframe script injection.
-    video_info: StdMutex<Option<serde_json::Value>>,
     /// Pending browser-webview downloads, keyed by download URL (for on_download handler).
     pending_downloads: StdMutex<HashMap<String, PendingBrowserDownload>>,
 }
@@ -181,7 +173,6 @@ fn browser_reload(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 /// Hide the main (Svelte) webview and show the browser webview.
-/// Destroys any existing video-webview.
 #[tauri::command]
 fn show_browser_view(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     let main_window = app.get_window("main").ok_or("Main window not found")?;
@@ -203,14 +194,6 @@ fn show_browser_view(app: tauri::AppHandle, state: State<'_, AppState>) -> Resul
         .set_size(LogicalSize::new(w, h))
         .map_err(|e| format!("set_size browser: {e}"))?;
 
-    // Destroy video-webview if it exists (free resources)
-    if let Some(video_wv) = app.get_webview("video-webview") {
-        let _ = video_wv.close();
-    }
-    if let Ok(mut vurl) = state.video_url.lock() {
-        vurl.clear();
-    }
-
     main_webview.hide().map_err(|e| format!("hide main: {e}"))?;
     browser.show().map_err(|e| format!("show browser: {e}"))?;
 
@@ -224,21 +207,12 @@ fn show_browser_view(app: tauri::AppHandle, state: State<'_, AppState>) -> Resul
 
 /// Shared logic for switching from browser to main view.
 /// Used by both the `show_main_view` command and the `pku-ipc` protocol handler.
-/// Destroys any existing video-webview.
 fn do_show_main_view(app: &tauri::AppHandle, view: &str) -> Result<(), String> {
     let main_window = app.get_window("main").ok_or("Main window not found")?;
     let main_webview = app.get_webview("main").ok_or("Main webview not found")?;
 
     if let Some(browser) = app.get_webview("browser-webview") {
         let _ = browser.hide();
-    }
-    // Destroy video-webview (free resources)
-    if let Some(video_wv) = app.get_webview("video-webview") {
-        let _ = video_wv.close();
-    }
-    let app_state = app.state::<AppState>();
-    if let Ok(mut vurl) = app_state.video_url.lock() {
-        vurl.clear();
     }
 
     let window_size = main_window.inner_size().map_err(|e| e.to_string())?;
@@ -274,207 +248,6 @@ fn do_show_main_view(app: &tauri::AppHandle, view: &str) -> Result<(), String> {
 #[tauri::command]
 fn show_main_view(app: tauri::AppHandle, view: String) -> Result<(), String> {
     do_show_main_view(&app, &view)
-}
-
-// ─── Video WebView lifecycle ───────────────────────────────────────────────
-// The video-webview is created on demand and destroyed when leaving the video
-// tab.  This avoids WebKitGTK z-order bugs with overlapping child webviews.
-//
-// Layout in video mode (NO overlap):
-//   main webview  → (0, 0)            size (w, HEADER_HEIGHT)   ← header only
-//   video-webview → (0, HEADER_HEIGHT) size (w, h-HEADER_HEIGHT)
-
-/// Create (or re-use) the video-webview and switch to the split layout.
-/// Idempotent: if a video-webview with the same URL already exists the layout
-/// is just re-applied.
-fn do_create_video_view(app: &tauri::AppHandle, url: &str) -> Result<(), String> {
-    let main_window = app.get_window("main").ok_or("Main window not found")?;
-    let main_webview = app.get_webview("main").ok_or("Main webview not found")?;
-
-    let window_size = main_window.inner_size().map_err(|e| e.to_string())?;
-    let scale = main_window.scale_factor().map_err(|e| e.to_string())?;
-    let w = window_size.width as f64 / scale;
-    let h = window_size.height as f64 / scale;
-
-    let app_state = app.state::<AppState>();
-
-    // Check if video-webview already exists
-    let existing = app.get_webview("video-webview");
-    if let Some(ref vw) = existing {
-        let same_url = app_state
-            .video_url
-            .lock()
-            .map(|u| u.as_str() == url)
-            .unwrap_or(false);
-        if same_url {
-            // Same URL — just make sure the layout is correct (e.g. after resize)
-            if let Some(browser) = app.get_webview("browser-webview") {
-                let _ = browser.hide();
-            }
-            main_webview
-                .set_position(LogicalPosition::new(0.0, 0.0))
-                .map_err(|e| format!("set_pos main: {e}"))?;
-            main_webview
-                .set_size(LogicalSize::new(w, HEADER_HEIGHT))
-                .map_err(|e| format!("set_size main: {e}"))?;
-            main_webview
-                .show()
-                .map_err(|e| format!("show main: {e}"))?;
-            vw.set_position(LogicalPosition::new(0.0, HEADER_HEIGHT))
-                .map_err(|e| format!("set_pos video: {e}"))?;
-            vw.set_size(LogicalSize::new(w, h - HEADER_HEIGHT))
-                .map_err(|e| format!("set_size video: {e}"))?;
-            if let Ok(mut mode) = app_state.current_view_mode.lock() {
-                *mode = "video".to_string();
-            }
-            eprintln!("[Rust] create_video_view: same URL, layout ensured");
-            return Ok(());
-        }
-        // Different URL — destroy old webview first
-        let _ = vw.close();
-        eprintln!("[Rust] create_video_view: closed old video-webview");
-    }
-
-    // Hide browser-webview
-    if let Some(browser) = app.get_webview("browser-webview") {
-        let _ = browser.hide();
-    }
-
-    // Shrink main webview to header-only strip (no overlap with video-webview)
-    main_webview
-        .set_position(LogicalPosition::new(0.0, 0.0))
-        .map_err(|e| format!("set_pos main: {e}"))?;
-    main_webview
-        .set_size(LogicalSize::new(w, HEADER_HEIGHT))
-        .map_err(|e| format!("set_size main: {e}"))?;
-    main_webview
-        .show()
-        .map_err(|e| format!("show main: {e}"))?;
-
-    // Build and create the video-webview
-    let hls_min_js = include_str!("../inject-scripts/hls.min.js");
-    let hls_player_js = include_str!("../inject-scripts/hls-player.js");
-    let vid_detector_js = include_str!("../inject-scripts/video-detector.js");
-    let overscroll_css = r#"(function(){
-        var s=document.createElement('style');
-        s.textContent='html,body{overscroll-behavior:none!important}';
-        (document.head||document.documentElement).appendChild(s);
-    })();"#;
-
-    // Embed stored video info so the top frame can show download buttons
-    // without depending on cross-origin iframe script injection.
-    let video_info_js = {
-        if let Ok(vi) = app_state.video_info.lock() {
-            if let Some(ref info) = *vi {
-                if let Ok(json_str) = serde_json::to_string(info) {
-                    format!("window.__PKU_VIDEO_INFO__ = {};", json_str)
-                } else {
-                    String::new()
-                }
-            } else {
-                String::new()
-            }
-        } else {
-            String::new()
-        }
-    };
-
-    let parsed_url: Url = url
-        .parse()
-        .unwrap_or_else(|_| START_URL.parse().unwrap());
-    let mut builder = tauri::webview::WebviewBuilder::new(
-        "video-webview",
-        tauri::WebviewUrl::External(parsed_url),
-    )
-    .initialization_script(hls_min_js)
-    .initialization_script(hls_player_js)
-    .initialization_script(vid_detector_js)
-    .initialization_script(overscroll_css)
-    .on_download(|webview, event| {
-        handle_download_event(&webview, event)
-    });
-
-    if !video_info_js.is_empty() {
-        builder = builder.initialization_script(&video_info_js);
-        eprintln!("[Rust] create_video_view: embedding video_info into webview");
-    }
-
-    main_window
-        .add_child(
-            builder,
-            LogicalPosition::new(0.0, HEADER_HEIGHT),
-            LogicalSize::new(w, h - HEADER_HEIGHT),
-        )
-        .map_err(|e| format!("add_child video: {e}"))?;
-
-    // Update state
-    if let Ok(mut vurl) = app_state.video_url.lock() {
-        *vurl = url.to_string();
-    }
-    if let Ok(mut mode) = app_state.current_view_mode.lock() {
-        *mode = "video".to_string();
-    }
-
-    eprintln!(
-        "[Rust] create_video_view: {}x{} (video at y={}) url={}",
-        w,
-        h - HEADER_HEIGHT,
-        HEADER_HEIGHT,
-        url
-    );
-    Ok(())
-}
-
-/// Destroy the video-webview and restore the main webview to full window size.
-/// Idempotent: safe to call when no video-webview exists.
-fn do_destroy_video_view(app: &tauri::AppHandle) -> Result<(), String> {
-    if let Some(video_wv) = app.get_webview("video-webview") {
-        let _ = video_wv.close();
-        eprintln!("[Rust] destroy_video_view: closed video-webview");
-    }
-
-    let app_state = app.state::<AppState>();
-    if let Ok(mut vurl) = app_state.video_url.lock() {
-        vurl.clear();
-    }
-
-    // Restore main webview to full window size
-    let main_window = app.get_window("main").ok_or("Main window not found")?;
-    let main_webview = app.get_webview("main").ok_or("Main webview not found")?;
-
-    let window_size = main_window.inner_size().map_err(|e| e.to_string())?;
-    let scale = main_window.scale_factor().map_err(|e| e.to_string())?;
-    let w = window_size.width as f64 / scale;
-    let h = window_size.height as f64 / scale;
-
-    main_webview
-        .set_position(LogicalPosition::new(0.0, 0.0))
-        .map_err(|e| format!("set_pos main: {e}"))?;
-    main_webview
-        .set_size(LogicalSize::new(w, h))
-        .map_err(|e| format!("set_size main: {e}"))?;
-    main_webview
-        .show()
-        .map_err(|e| format!("show main: {e}"))?;
-
-    Ok(())
-}
-
-/// Tauri command: create (or re-use) the video-webview.
-#[tauri::command]
-fn create_video_view(app: tauri::AppHandle, url: String) -> Result<(), String> {
-    do_create_video_view(&app, &url)
-}
-
-/// Tauri command: destroy the video-webview and restore main to full size.
-#[tauri::command]
-fn destroy_video_view(app: tauri::AppHandle) -> Result<(), String> {
-    do_destroy_video_view(&app)?;
-    let app_state = app.state::<AppState>();
-    if let Ok(mut mode) = app_state.current_view_mode.lock() {
-        *mode = "main".to_string();
-    }
-    Ok(())
 }
 
 /// Download a video file using the platform's native webview download API.
@@ -950,8 +723,6 @@ fn main() {
             download_manager: Mutex::new(DownloadManager::new()),
             settings: Mutex::new(AppSettings::default()),
             current_view_mode: StdMutex::new("browser".to_string()),
-            video_url: StdMutex::new(String::new()),
-            video_info: StdMutex::new(None),
             pending_downloads: StdMutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
@@ -972,8 +743,6 @@ fn main() {
             browser_download,
             show_browser_view,
             show_main_view,
-            create_video_view,
-            destroy_video_view,
         ])
         // ─── Custom IPC protocol for inject scripts ───
         // Inject scripts in the browser-webview (remote URLs) cannot use
@@ -1015,17 +784,12 @@ fn main() {
             } else if uri.contains("/video-info") {
                 let body_str = String::from_utf8_lossy(request.body());
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&body_str) {
-                    // Store for embedding into video-webview later
-                    let app_state = app.state::<AppState>();
-                    if let Ok(mut vi) = app_state.video_info.lock() {
-                        *vi = Some(value.clone());
-                    }
                     let payload = serde_json::json!({
                         "type": "video-info",
                         "data": value
                     });
                     let _ = app.emit("webview-message", payload);
-                    eprintln!("[pku-ipc] video-info stored and emitted");
+                    eprintln!("[pku-ipc] video-info emitted");
                 }
             } else if uri.contains("/add-download") {
                 let body_str = String::from_utf8_lossy(request.body());
@@ -1041,21 +805,6 @@ fn main() {
                             Ok(_) => eprintln!("[pku-ipc] open-external: {url}"),
                             Err(e) => eprintln!("[pku-ipc] open-external error: {e}"),
                         }
-                    }
-                }
-            } else if uri.contains("/open-video") {
-                let body_str = String::from_utf8_lossy(request.body());
-                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&body_str) {
-                    if let Some(url) = value.get("url").and_then(|v| v.as_str()) {
-                        eprintln!("[pku-ipc] open-video: {url}");
-
-                        // Create (or re-use) the video-webview with the split layout
-                        if let Err(e) = do_create_video_view(app, url) {
-                            eprintln!("[pku-ipc] create_video_view error: {e}");
-                        }
-
-                        // Tell Svelte to switch to the video tab
-                        let _ = app.emit("switch-to-video", serde_json::json!({ "url": url }));
                     }
                 }
             }
@@ -1087,6 +836,8 @@ fn main() {
 
             let nav_bar_js = include_str!("../inject-scripts/nav-bar.js");
             let video_detector_js = include_str!("../inject-scripts/video-detector.js");
+            let hls_min_js = include_str!("../inject-scripts/hls.min.js");
+            let hls_player_js = include_str!("../inject-scripts/hls-player.js");
 
             let parsed_url: Url = START_URL.parse().expect("invalid START_URL");
             let builder = tauri::webview::WebviewBuilder::new(
@@ -1095,6 +846,8 @@ fn main() {
             )
             .initialization_script(nav_bar_js)
             .initialization_script(video_detector_js)
+            .initialization_script(hls_min_js)
+            .initialization_script(hls_player_js)
             .on_download(|webview, event| {
                 handle_download_event(&webview, event)
             });
@@ -1136,17 +889,6 @@ fn main() {
                             if let Some(browser) = app_handle.get_webview("browser-webview") {
                                 let _ = browser.set_position(LogicalPosition::new(0.0, 0.0));
                                 let _ = browser.set_size(LogicalSize::new(w, h));
-                            }
-                        }
-                        "video" => {
-                            // Split layout: main = header only, video = rest
-                            if let Some(main_wv) = app_handle.get_webview("main") {
-                                let _ = main_wv.set_position(LogicalPosition::new(0.0, 0.0));
-                                let _ = main_wv.set_size(LogicalSize::new(w, HEADER_HEIGHT));
-                            }
-                            if let Some(video_wv) = app_handle.get_webview("video-webview") {
-                                let _ = video_wv.set_position(LogicalPosition::new(0.0, HEADER_HEIGHT));
-                                let _ = video_wv.set_size(LogicalSize::new(w, h - HEADER_HEIGHT));
                             }
                         }
                         _ => {

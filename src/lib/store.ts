@@ -1,8 +1,8 @@
 import { writable } from "svelte/store";
 import type { DownloadTask, AppSettings, VideoInfo } from "./types";
 
-// Current view: 'browser' | 'downloads' | 'settings' | 'video'
-export const currentView = writable<'browser' | 'downloads' | 'settings' | 'video'>('browser');
+// Current view: 'browser' | 'downloads' | 'settings'
+export const currentView = writable<'browser' | 'downloads' | 'settings'>('browser');
 
 // Theme: 'light' | 'dark'
 export const theme = writable<'light' | 'dark'>('light');
@@ -12,9 +12,6 @@ export const downloadTasks = writable<DownloadTask[]>([]);
 
 // Current video info from browser
 export const currentVideoInfo = writable<VideoInfo | null>(null);
-
-// URL of the video currently loaded in the video-webview
-export const videoUrl = writable<string>('');
 
 // App settings
 export const settings = writable<AppSettings>({

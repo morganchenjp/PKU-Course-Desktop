@@ -1,6 +1,6 @@
 [package]
 name = "pku-course-desktop"
-version = "0.1.0"
+version = "0.2.0"
 description = "PKU Course Desktop - A Tauri-based desktop app for PKU course video download"
 authors = ["Arthals"]
 edition = "2021"
