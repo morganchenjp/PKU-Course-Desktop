@@ -41,7 +41,8 @@
       "dangerousDisableAssetCspModification": false,
       "freezePrototype": false
     },
-    "withGlobalTauri": false
+    "withGlobalTauri": false,
+    "enableGTKAppId": true
   },
   "bundle": {
     "active": true,

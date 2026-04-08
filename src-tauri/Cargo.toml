@@ -10,7 +10,7 @@ rust-version = "1.77.0"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["devtools", "unstable"] }
+tauri = { version = "2", features = ["devtools", "unstable", "image-png"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }

@@ -121,7 +121,7 @@
 <div class="app" data-theme={$theme}>
   <header class="app-header">
     <div class="logo">
-      <span class="logo-icon">🎨</span>
+      <img class="logo-icon" src="/app-icon.png" alt="Logo" />
       <span class="logo-text">PKU Course Desktop</span>
     </div>
     <nav class="nav-tabs">
@@ -194,7 +194,9 @@
   }
 
   .logo-icon {
-    font-size: 20px;
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
   }
 
   .nav-tabs {

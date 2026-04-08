@@ -8,6 +8,7 @@ mod settings;
 use download::{DownloadManager, DownloadTask};
 use settings::AppSettings;
 use tauri::{Emitter, LogicalPosition, LogicalSize, Manager, State};
+use tauri::image::Image;
 use std::sync::Mutex as StdMutex;
 use tokio::sync::Mutex;
 use url::Url;
@@ -828,6 +829,12 @@ fn main() {
             let main_window = app
                 .get_window("main")
                 .expect("main window not found during setup");
+
+            // Set window icon (for Linux Dock / Windows taskbar)
+            let icon_bytes = include_bytes!("../icons/icon.png");
+            if let Ok(icon) = Image::from_bytes(icon_bytes) {
+                let _ = main_window.set_icon(icon);
+            }
 
             let window_size = main_window.inner_size().unwrap_or_default();
             let scale = main_window.scale_factor().unwrap_or(1.0);
