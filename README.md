@@ -37,6 +37,8 @@ brew install ffmpeg
 ```bash
 sudo apt update
 sudo apt install ffmpeg
+## also need install gstreamer to support online play HLS(m3u8) video
+sudo apt install gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-alsa
 ```
 
 **Windows:**
