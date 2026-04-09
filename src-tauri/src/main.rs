@@ -187,12 +187,15 @@ fn show_browser_view(app: tauri::AppHandle, state: State<'_, AppState>) -> Resul
     let w = window_size.width as f64 / scale;
     let h = window_size.height as f64 / scale;
 
-    // Ensure browser webview fills the whole window at the correct position
+    // Get the header height (48px in CSS, but we need to account for scale)
+    let header_height = 48.0;
+
+    // Position browser webview below the header
     browser
-        .set_position(LogicalPosition::new(0.0, 0.0))
+        .set_position(LogicalPosition::new(0.0, header_height))
         .map_err(|e| format!("set_pos browser: {e}"))?;
     browser
-        .set_size(LogicalSize::new(w, h))
+        .set_size(LogicalSize::new(w, h - header_height))
         .map_err(|e| format!("set_size browser: {e}"))?;
 
     main_webview.hide().map_err(|e| format!("hide main: {e}"))?;
@@ -202,7 +205,7 @@ fn show_browser_view(app: tauri::AppHandle, state: State<'_, AppState>) -> Resul
         *mode = "browser".to_string();
     }
 
-    eprintln!("[Rust] show_browser_view: {}x{}", w, h);
+    eprintln!("[Rust] show_browser_view: {}x{} at (0, {})", w, h - header_height, header_height);
     Ok(())
 }
 
@@ -308,7 +311,7 @@ fn browser_download_linux(
     // Ensure browser-webview is visible (WebKitGTK may not process network
     // requests for hidden webviews).  Position off-screen so the user won't
     // see it flash.
-    let _ = browser.set_position(tauri::LogicalPosition::new(10000.0, 0.0));
+    let _ = browser.set_position(tauri::LogicalPosition::new(10000.0, 48.0));
     let _ = browser.show();
 
     let url_clone = url.to_string();
@@ -861,13 +864,13 @@ fn main() {
 
             match main_window.add_child(
                 builder,
-                LogicalPosition::new(0.0, 0.0),
-                LogicalSize::new(w, h),
+                LogicalPosition::new(0.0, 48.0),
+                LogicalSize::new(w, h - 48.0),
             ) {
                 Ok(browser) => {
                     // Start hidden; BrowserView.svelte will call show_browser_view
                     let _ = browser.hide();
-                    eprintln!("[Rust] browser-webview pre-created (hidden, {}x{})", w, h);
+                    eprintln!("[Rust] browser-webview pre-created (hidden, {}x{} at 0,48)", w, h - 48.0);
                 }
                 Err(e) => {
                     eprintln!("[Rust] failed to pre-create browser-webview: {e}");
@@ -893,9 +896,11 @@ fn main() {
 
                     match mode.as_str() {
                         "browser" => {
+                            // Browser mode: webview below header (48px)
+                            let header_height = 48.0;
                             if let Some(browser) = app_handle.get_webview("browser-webview") {
-                                let _ = browser.set_position(LogicalPosition::new(0.0, 0.0));
-                                let _ = browser.set_size(LogicalSize::new(w, h));
+                                let _ = browser.set_position(LogicalPosition::new(0.0, header_height));
+                                let _ = browser.set_size(LogicalSize::new(w, h - header_height));
                             }
                         }
                         _ => {
