@@ -212,6 +212,7 @@ fn show_browser_view(app: tauri::AppHandle, state: State<'_, AppState>) -> Resul
 /// Shared logic for switching from browser to main view.
 /// Used by both the `show_main_view` command and the `pku-ipc` protocol handler.
 fn do_show_main_view(app: &tauri::AppHandle, view: &str) -> Result<(), String> {
+    eprintln!("[DEBUG macOS] do_show_main_view called: view={}", view);
     let main_window = app.get_window("main").ok_or("Main window not found")?;
     let main_webview = app.get_webview("main").ok_or("Main webview not found")?;
 
@@ -726,7 +727,7 @@ fn main() {
         .manage(AppState {
             download_manager: Mutex::new(DownloadManager::new()),
             settings: Mutex::new(AppSettings::default()),
-            current_view_mode: StdMutex::new("browser".to_string()),
+            current_view_mode: StdMutex::new("main".to_string()),
             pending_downloads: StdMutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
@@ -777,6 +778,7 @@ fn main() {
                     eprintln!("[download-diag] {body_str}");
                 }
             } else if uri.contains("/show-main-view") {
+                eprintln!("[DEBUG macOS] IPC /show-main-view received, uri={}", uri);
                 let view = if uri.contains("view=settings") {
                     "settings"
                 } else {

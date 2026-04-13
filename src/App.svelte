@@ -22,6 +22,7 @@
     // When the user clicks "下载管理" or "设置" in the injected toolbar,
     // Rust emits this event after showing the main webview.
     unlistenSwitchToMain = await listen("switch-to-main", (event: any) => {
+      console.log('[DEBUG macOS] switch-to-main event received:', event.payload);
       const view = event.payload?.view;
       if (view === 'downloads' || view === 'settings') {
         currentView.set(view);
