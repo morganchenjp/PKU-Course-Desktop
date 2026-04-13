@@ -727,7 +727,7 @@ fn main() {
         .manage(AppState {
             download_manager: Mutex::new(DownloadManager::new()),
             settings: Mutex::new(AppSettings::default()),
-            current_view_mode: StdMutex::new("main".to_string()),
+            current_view_mode: StdMutex::new("browser".to_string()),
             pending_downloads: StdMutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
@@ -877,6 +877,14 @@ fn main() {
                 Err(e) => {
                     eprintln!("[Rust] failed to pre-create browser-webview: {e}");
                 }
+            }
+
+            // Explicitly hide the main webview at startup so only browser-webview is visible.
+            // On macOS/WKWebView a hidden webview doesn't execute JS, so listeners registered
+            // in Svelte's onMount won't fire from a hidden state.
+            if let Some(main_wv) = app.get_webview("main") {
+                let _ = main_wv.hide();
+                eprintln!("[Rust] main webview explicitly hidden at startup");
             }
 
             // ─── Window resize handler ───
