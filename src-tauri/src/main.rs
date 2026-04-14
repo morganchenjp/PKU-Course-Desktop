@@ -12,10 +12,31 @@ use tauri::image::Image;
 use std::sync::Mutex as StdMutex;
 use tokio::sync::Mutex;
 use url::Url;
+use std::collections::HashMap;
+use std::fs::{OpenOptions, PathBuf};
+use std::io::Write;
 
 const START_URL: &str = "https://course.pku.edu.cn";
 
-use std::collections::HashMap;
+/// Write a debug message to a log file in the same directory as the app executable.
+/// On macOS (.app bundle) this resolves to Contents/MacOS/, which is writable.
+fn debug_log(msg: &str) {
+    let log_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."));
+    let log_path = log_dir.join("pku-course-desktop.log");
+
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+        let _ = writeln!(file, "{} [macOS-DEBUG] {}", ts, msg);
+    }
+    eprintln!("[macOS-DEBUG] {}", msg); // Also print to stderr for dev environments
+}
 
 /// Info about a download triggered via the browser-webview's native HTTP stack.
 struct PendingBrowserDownload {
@@ -212,7 +233,7 @@ fn show_browser_view(app: tauri::AppHandle, state: State<'_, AppState>) -> Resul
 /// Shared logic for switching from browser to main view.
 /// Used by both the `show_main_view` command and the `pku-ipc` protocol handler.
 fn do_show_main_view(app: &tauri::AppHandle, view: &str) -> Result<(), String> {
-    eprintln!("[DEBUG macOS] do_show_main_view called: view={}", view);
+    debug_log(&format!("do_show_main_view called: view={}", view));
     let main_window = app.get_window("main").ok_or("Main window not found")?;
     let main_webview = app.get_webview("main").ok_or("Main webview not found")?;
 
@@ -778,7 +799,7 @@ fn main() {
                     eprintln!("[download-diag] {body_str}");
                 }
             } else if uri.contains("/show-main-view") {
-                eprintln!("[DEBUG macOS] IPC /show-main-view received, uri={}", uri);
+                debug_log(&format!("IPC /show-main-view received, uri={}", uri));
                 let view = if uri.contains("view=settings") {
                     "settings"
                 } else {
