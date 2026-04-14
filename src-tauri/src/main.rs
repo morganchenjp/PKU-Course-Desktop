@@ -19,14 +19,24 @@ use std::io::Write;
 
 const START_URL: &str = "https://course.pku.edu.cn";
 
-/// Write a debug message to a log file in the same directory as the app executable.
-/// On macOS (.app bundle) this resolves to Contents/MacOS/, which is writable.
+/// Write a debug message to a log file.
+/// - Linux: $HOME/.local/share/pku-course-desktop/pku-course-desktop.log
+/// - macOS: PKU Course Desktop.app/Contents/MacOS/pku-course-desktop.log 
+/// Windows: same directory as the app executable
 fn debug_log(msg: &str) {
-    let log_dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| PathBuf::from("."));
-    let log_path = log_dir.join("pku-course-desktop.log");
+    let log_path = if cfg!(target_os = "linux") {
+        let dir = dirs::data_local_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("pku-course-desktop");
+        let _ = std::fs::create_dir_all(&dir);
+        dir.join("pku-course-desktop.log")
+    } else {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("pku-course-desktop.log")
+    };
 
     if let Ok(mut file) = OpenOptions::new()
         .create(true)
@@ -34,9 +44,9 @@ fn debug_log(msg: &str) {
         .open(&log_path)
     {
         let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
-        let _ = writeln!(file, "{} [macOS-DEBUG] {}", ts, msg);
+        let _ = writeln!(file, "{} [DEBUG] {}", ts, msg);
     }
-    eprintln!("[macOS-DEBUG] {}", msg); // Also print to stderr for dev environments
+    eprintln!("[DEBUG] {}", msg);
 }
 
 /// Info about a download triggered via the browser-webview's native HTTP stack.
@@ -198,6 +208,7 @@ fn browser_reload(app: tauri::AppHandle) -> Result<(), String> {
 /// Hide the main (Svelte) webview and show the browser webview.
 #[tauri::command]
 fn show_browser_view(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    debug_log("show_browser_view triggered");
     let main_window = app.get_window("main").ok_or("Main window not found")?;
     let main_webview = app.get_webview("main").ok_or("Main webview not found")?;
     let browser = app
@@ -274,6 +285,7 @@ fn do_show_main_view(app: &tauri::AppHandle, view: &str) -> Result<(), String> {
 /// Emits a "switch-to-main" event so the Svelte app can update its view.
 #[tauri::command]
 fn show_main_view(app: tauri::AppHandle, view: String) -> Result<(), String> {
+    debug_log(&format!("show_main_view triggered: view={}", view));
     do_show_main_view(&app, &view)
 }
 

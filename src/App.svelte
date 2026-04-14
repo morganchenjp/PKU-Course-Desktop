@@ -92,6 +92,7 @@
   });
 
   async function switchToBrowser() {
+    console.log('[DEBUG macOS] switchToBrowser called');
     try {
       await invoke('show_browser_view');
     } catch (e) {
@@ -101,6 +102,7 @@
   }
 
   async function switchToDownloads() {
+    console.log('[DEBUG macOS] switchToDownloads called');
     try {
       await invoke('show_main_view', { view: 'downloads' });
     } catch (e) {
@@ -110,6 +112,7 @@
   }
 
   async function switchToSettings() {
+    console.log('[DEBUG macOS] switchToSettings called');
     try {
       await invoke('show_main_view', { view: 'settings' });
     } catch (e) {
