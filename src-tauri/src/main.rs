@@ -13,7 +13,8 @@ use std::sync::Mutex as StdMutex;
 use tokio::sync::Mutex;
 use url::Url;
 use std::collections::HashMap;
-use std::fs::{OpenOptions, PathBuf};
+use std::fs::OpenOptions;
+use std::path::PathBuf;
 use std::io::Write;
 
 const START_URL: &str = "https://course.pku.edu.cn";
