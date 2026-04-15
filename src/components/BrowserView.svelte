@@ -11,10 +11,6 @@
 
   onMount(async () => {
     try {
-      // Show the browser webview (hide main webview)
-      await invoke('show_browser_view');
-      console.log('[BrowserView] show_browser_view succeeded');
-
       // Listen for messages from the browser webview (video detection, page loads)
       unlistenMessage = await listen("webview-message", (event: any) => {
         handleWebviewMessage(event.payload);

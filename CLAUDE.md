@@ -100,6 +100,8 @@ FFmpeg must be installed separately; the app checks `is_ffmpeg_available()` befo
 
 - **Remote URL IPC**: `window.__TAURI__` is blocked on remote URLs due to CSP/capability restrictions. All IPC from inject scripts uses `pku-ipc://` custom URI scheme via XMLHttpRequest. Cross-origin iframes additionally require postMessage relay through the top frame.
 
+- **WebKitGTK XHR response caching**: WebKitGTK caches XHR responses to custom URI schemes (like `pku-ipc://`) based on URL path only, ignoring query strings. This caused subsequent view-switch IPC calls to return cached "ok" responses without ever reaching the Rust handler. The first click would work, but all subsequent clicks on nav-bar buttons would silently fail. **Fix**: append a cache-busting query parameter (`&_=<timestamp>.<random>`) to every `pku-ipc://` URL in `ipcSend()` inside `nav-bar.js`. This makes each request URL unique, bypassing the cache.
+
 ## Development plan
 
 ### Phase-1,MVP

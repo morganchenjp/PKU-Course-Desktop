@@ -24,19 +24,38 @@
   var START_URL = 'https://course.pku.edu.cn';
   var currentUrl = location.href;
 
+  // ─── Logging helper with timestamp ───
+  function log() {
+    var args = Array.prototype.slice.call(arguments);
+    var ts = new Date().toLocaleTimeString('en-US', { hour12: false }) + '.' + Date.now() % 1000;
+    console.warn('[' + ts + ']', args.join(' '));
+  }
+
   // ─── IPC helper: send commands to Rust via custom URI scheme ───
+  // Add cache-busting query param so WebKitGTK doesn't replay a cached response
   function ipcSend(path, data) {
+    var nocache = '&_=' + Date.now() + '.' + Math.random();
+    log('[nav-bar] ipcSend called:', path);
     try {
       var xhr = new XMLHttpRequest();
-      var url = 'pku-ipc://localhost/' + path;
+      var url = 'pku-ipc://localhost/' + path + nocache;
       xhr.open(data ? 'POST' : 'GET', url, true);
+      xhr.onerror = function() {
+        log('[nav-bar] XHR onerror:', path, 'status=', xhr.status, 'readyState=', xhr.readyState);
+      };
+      xhr.onload = function() {
+        log('[nav-bar] XHR onload:', path, 'status=', xhr.status, 'response=', xhr.responseText);
+      };
+      xhr.ontimeout = function() {
+        log('[nav-bar] XHR timeout:', path);
+      };
       if (data) {
         xhr.send(typeof data === 'string' ? data : JSON.stringify(data));
       } else {
         xhr.send();
       }
     } catch (e) {
-      console.warn('[nav-bar] IPC send failed:', path, e);
+      log('[nav-bar] IPC send exception:', path, e);
     }
   }
 
@@ -119,7 +138,7 @@
   // Home button
   var btnHome = createBtn('pku-nav-btn', '\uD83C\uDFE0', '\u9996\u9875');
 
-  // View-switch buttons
+  // View-switch buttons: use pku-ipc:// custom protocol
   var btnDownloads = createBtn('pku-nav-action', '\uD83D\uDCE5 \u4E0B\u8F7D\u7BA1\u7406');
   var btnSettings = createBtn('pku-nav-action', '\u2699 \u8BBE\u7F6E');
 
@@ -161,14 +180,16 @@
     window.location.href = START_URL;
   });
 
-  // View-switch buttons use the pku-ipc custom protocol to ask Rust to
-  // hide the browser webview and show the Svelte main view.
-  btnDownloads.addEventListener('click', function () {
+  // View-switch buttons: use pku-ipc:// custom protocol to call Rust
+  btnDownloads.addEventListener('click', function (e) {
+    e.stopPropagation();
     ipcSend('show-main-view?view=downloads');
   });
-  btnSettings.addEventListener('click', function () {
+  btnSettings.addEventListener('click', function (e) {
+    e.stopPropagation();
     ipcSend('show-main-view?view=settings');
   });
+
 
   // URL input: navigate on Enter
   urlInput.addEventListener('keydown', function (e) {

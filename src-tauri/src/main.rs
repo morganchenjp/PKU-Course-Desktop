@@ -24,6 +24,8 @@ const START_URL: &str = "https://course.pku.edu.cn";
 /// - macOS: PKU Course Desktop.app/Contents/MacOS/pku-course-desktop.log 
 /// Windows: same directory as the app executable
 fn debug_log(msg: &str) {
+    let ts = chrono::Local::now().format("%H:%M:%S%.3f");
+
     let log_path = if cfg!(target_os = "linux") {
         let dir = dirs::data_local_dir()
             .unwrap_or_else(|| PathBuf::from("."))
@@ -43,10 +45,9 @@ fn debug_log(msg: &str) {
         .append(true)
         .open(&log_path)
     {
-        let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
         let _ = writeln!(file, "{} [DEBUG] {}", ts, msg);
     }
-    eprintln!("[DEBUG] {}", msg);
+    eprintln!("{} [DEBUG] {}", ts, msg);
 }
 
 /// Info about a download triggered via the browser-webview's native HTTP stack.
@@ -209,6 +210,11 @@ fn browser_reload(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn show_browser_view(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     debug_log("show_browser_view triggered");
+
+    // Set mode BEFORE operations so that if anything fails, state is correct for retry
+    let mut mode = state.current_view_mode.lock().map_err(|e| e.to_string())?;
+    *mode = "browser".to_string();
+
     let main_window = app.get_window("main").ok_or("Main window not found")?;
     let main_webview = app.get_webview("main").ok_or("Main webview not found")?;
     let browser = app
@@ -233,10 +239,9 @@ fn show_browser_view(app: tauri::AppHandle, state: State<'_, AppState>) -> Resul
 
     main_webview.hide().map_err(|e| format!("hide main: {e}"))?;
     browser.show().map_err(|e| format!("show browser: {e}"))?;
+    let _ = browser.set_focus(); // Ensure browser webview receives input focus
 
-    if let Ok(mut mode) = state.current_view_mode.lock() {
-        *mode = "browser".to_string();
-    }
+    debug_log("show_browser_view: hide(main) + show(browser) complete");
 
     eprintln!("[Rust] show_browser_view: {}x{} at (0, {})", w, h - header_height, header_height);
     Ok(())
@@ -246,11 +251,19 @@ fn show_browser_view(app: tauri::AppHandle, state: State<'_, AppState>) -> Resul
 /// Used by both the `show_main_view` command and the `pku-ipc` protocol handler.
 fn do_show_main_view(app: &tauri::AppHandle, view: &str) -> Result<(), String> {
     debug_log(&format!("do_show_main_view called: view={}", view));
+
+    // Set mode BEFORE operations so that if anything fails, state is correct for retry
+    let app_state = app.state::<AppState>();
+    let mut mode = app_state.current_view_mode.lock().map_err(|e| e.to_string())?;
+    *mode = "main".to_string();
+
     let main_window = app.get_window("main").ok_or("Main window not found")?;
     let main_webview = app.get_webview("main").ok_or("Main webview not found")?;
 
+    // Move browser off-screen instead of hide() to avoid Z-order issues on GTK.
+    // hide() doesn't lower Z-order on WebKitGTK, so the hidden browser can still block clicks.
     if let Some(browser) = app.get_webview("browser-webview") {
-        let _ = browser.hide();
+        let _ = browser.set_position(LogicalPosition::new(10000.0, 48.0));
     }
 
     let window_size = main_window.inner_size().map_err(|e| e.to_string())?;
@@ -267,11 +280,9 @@ fn do_show_main_view(app: &tauri::AppHandle, view: &str) -> Result<(), String> {
     main_webview
         .show()
         .map_err(|e| format!("show main: {e}"))?;
+    let _ = main_webview.set_focus(); // Ensure main webview receives input focus
 
-    let app_state = app.state::<AppState>();
-    if let Ok(mut mode) = app_state.current_view_mode.lock() {
-        *mode = "main".to_string();
-    }
+    debug_log("do_show_main_view: hide(browser) + show(main) complete");
 
     // Tell the Svelte app which view to show
     app.emit("switch-to-main", serde_json::json!({ "view": view }))
@@ -789,6 +800,7 @@ fn main() {
         // requests to this custom "pku-ipc" URI scheme via XMLHttpRequest.
         .register_uri_scheme_protocol("pku-ipc", |ctx, request| {
             let app = ctx.app_handle();
+            debug_log(&format!("pku-ipc protocol hit: method={} uri={}", request.method(), request.uri()));
 
             // Handle CORS preflight
             if *request.method() == "OPTIONS" {

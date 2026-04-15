@@ -10,6 +10,7 @@
   import { createDownloadTask } from "./lib/download-utils";
 
   let unlistenSwitchToMain: (() => void) | null = null;
+  let isTransitioning = false;
   let unlistenAddDownload: (() => void) | null = null;
   let unlistenDlProgress: (() => void) | null = null;
   let unlistenDlComplete: (() => void) | null = null;
@@ -18,12 +19,26 @@
   onMount(async () => {
     initTheme();
 
+    // On startup, if currentView is 'browser', ensure the browser webview is shown.
+    // This is the only place show_browser_view should be called at startup.
+    if ($currentView === 'browser') {
+      console.log('[App] startup: showing browser view');
+      try {
+        await invoke('show_browser_view');
+      } catch (e) {
+        console.error('[App] startup show_browser_view failed:', e);
+      }
+    }
+
     // Listen for view-switch events from the browser webview's injected nav-bar.
     // When the user clicks "下载管理" or "设置" in the injected toolbar,
     // Rust emits this event after showing the main webview.
+    // Only update local view state here — do NOT call invoke() since nav-bar IPC
+    // already handled the full switch (view resizing + event emission).
     unlistenSwitchToMain = await listen("switch-to-main", (event: any) => {
-      console.log('[DEBUG macOS] switch-to-main event received:', event.payload);
+      console.log('[DEBUG Svelte] switch-to-main event received:', JSON.stringify(event.payload));
       const view = event.payload?.view;
+      console.log('[DEBUG Svelte] setting currentView to:', view);
       if (view === 'downloads' || view === 'settings') {
         currentView.set(view);
       }
@@ -92,7 +107,7 @@
   });
 
   async function switchToBrowser() {
-    console.log('[DEBUG macOS] switchToBrowser called');
+    console.log('[DEBUG Svelte] switchToBrowser clicked');
     try {
       await invoke('show_browser_view');
     } catch (e) {
@@ -102,7 +117,7 @@
   }
 
   async function switchToDownloads() {
-    console.log('[DEBUG macOS] switchToDownloads called');
+    console.log('[DEBUG Svelte] switchToDownloads clicked');
     try {
       await invoke('show_main_view', { view: 'downloads' });
     } catch (e) {
@@ -112,7 +127,7 @@
   }
 
   async function switchToSettings() {
-    console.log('[DEBUG macOS] switchToSettings called');
+    console.log('[DEBUG Svelte] switchToSettings clicked');
     try {
       await invoke('show_main_view', { view: 'settings' });
     } catch (e) {
@@ -158,7 +173,7 @@
     </div>
   </header>
 
-  <main class="app-main">
+  <main class="app-main" class:browser-mode={$currentView === 'browser'}>
     {#if $currentView === 'browser'}
       <BrowserView />
     {:else if $currentView === 'downloads'}
@@ -258,5 +273,12 @@
     flex: 1;
     overflow: hidden;
     position: relative;
+  }
+
+  /* When browser view is active, make main webview transparent and non-interactive
+     so clicks pass through to the browser webview underneath. The nav-bar buttons
+     are behind the Svelte header, so we must remove input handling entirely. */
+  .app-main.browser-mode {
+    display: none;
   }
 </style>
