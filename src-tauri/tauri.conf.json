@@ -55,7 +55,8 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "inject-scripts/**/*"
+      "inject-scripts/**/*",
+      "../public/morgan-wechat-qrcode.png"
     ],
     "copyright": "Copyright (c) 2024 Arthals",
     "category": "Education",

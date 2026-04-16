@@ -861,6 +861,18 @@ fn main() {
                         }
                     }
                 }
+            } else if uri.contains("/donation-qr") {
+                // Serve the donation QR code PNG (read directly from source tree)
+                let png_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../public/morgan-wechat-qrcode.png");
+                let png_data = std::fs::read(&png_path)
+                    .expect("failed to read donation QR PNG");
+                return tauri::http::Response::builder()
+                    .status(200)
+                    .header("Content-Type", "image/png")
+                    .header("Access-Control-Allow-Origin", "*")
+                    .body(png_data)
+                    .unwrap();
             }
 
             tauri::http::Response::builder()

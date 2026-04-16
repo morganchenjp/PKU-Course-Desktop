@@ -10,9 +10,23 @@
   }
   
   let { videoInfo, onClose, onDownload }: Props = $props();
-  
+
   let isAddingToQueue = $state(false);
   let addSuccess = $state(false);
+  let showDonationQR = $state(false);
+
+  // Close donation popup when clicking outside
+  $effect(() => {
+    if (!showDonationQR) return;
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.donation-popup') && !target.closest('.btn-donate')) {
+        showDonationQR = false;
+      }
+    }
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  });
   
   async function addToDownloadQueue() {
     isAddingToQueue = true;
@@ -79,8 +93,11 @@
     <button class="btn btn-secondary" onclick={onClose}>
       忽略
     </button>
-    <button 
-      class="btn btn-primary" 
+    <button class="btn btn-donate" onclick={() => showDonationQR = !showDonationQR}>
+      ☕ Buy me a coffee
+    </button>
+    <button
+      class="btn btn-primary"
       onclick={addToDownloadQueue}
       disabled={isAddingToQueue}
     >
@@ -92,6 +109,15 @@
         添加到下载队列
       {/if}
     </button>
+    {#if showDonationQR}
+      <div class="donation-popup">
+        <div class="donation-popup-inner">
+          <p class="donation-tip">扫描下方二维码</p>
+          <img class="qrcode-img" src="pku-ipc://localhost/donation-qr" alt="WeChat Pay QR Code" />
+          <button class="donation-close" onclick={() => showDonationQR = false}>×</button>
+        </div>
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -216,5 +242,74 @@
   .btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  .btn-donate {
+    background: #07c160;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 8px 16px;
+  }
+
+  .btn-donate:hover {
+    background: #06a850;
+  }
+
+  .card-footer {
+    position: relative;
+  }
+
+  .donation-popup {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    padding: 16px;
+    z-index: 200;
+  }
+
+  .donation-popup-inner {
+    position: relative;
+  }
+
+  .donation-tip {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  .donation-popup .qrcode-img {
+    width: 160px;
+    height: 160px;
+    display: block;
+  }
+
+  .donation-close {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: var(--bg-hover);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    color: var(--text-secondary);
+  }
+
+  .donation-close:hover {
+    background: var(--border-color);
+    color: var(--text-primary);
   }
 </style>

@@ -213,7 +213,7 @@
       'display:grid!important;width:fit-content!important;' +
       'grid-template-columns:repeat(3,200px)!important;' +
       'justify-content:center!important;align-items:center!important;' +
-      'gap:10px!important;margin:10px auto!important;';
+      'gap:10px!important;margin:10px auto!important;position:relative!important;';
 
     var btnCss =
       'height:35px;border:none;border-radius:4px;font-size:14px;font-weight:bold;' +
@@ -235,10 +235,58 @@
     copyBtn.style.cssText = btnCss + 'background:#374151;color:#e5e7eb;';
     copyBtn.innerHTML = linkSvg + '<span>\u590D\u5236\u94FE\u63A5</span>';
 
-    // Open in browser button
+    // Coffee / donation button
     var browserBtn = document.createElement('button');
-    browserBtn.style.cssText = btnCss + 'background:#059669;color:#fff;';
-    browserBtn.innerHTML = playSvg + '<span>\u5728\u6D4F\u89C8\u5668\u64AD\u653E</span>';
+    browserBtn.style.cssText = btnCss + 'background:#07c160;color:#fff;';
+    browserBtn.innerHTML = '<span>\u2615 \u9001\u6211\u676F\u5496\u5561</span>';
+
+    var qrPopup = document.createElement('div');
+    qrPopup.style.cssText =
+      'display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);' +
+      'background:#fff;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.15);' +
+      'padding:16px;text-align:center;z-index:9999;';
+    qrPopup.innerHTML =
+      '<div style="font-size:13px;color:#6b7280;margin-bottom:8px;">\u626B\u63CF\u4E0B\u65B9\u4E8C\u7EF4\u7801</div>' +
+      '<img id="donation-qr-img" alt="WeChat Pay" style="width:160px;height:160px;display:block;" />' +
+      '<button class="qr-close-btn" style="' +
+      'position:absolute;top:-8px;right:-8px;width:20px;height:20px;border:none;' +
+      'background:#f3f4f6;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;">\u00D7</button>';
+    browserBtn.style.position = 'relative';
+    browserBtn.appendChild(qrPopup);
+
+    var qrBlobUrl = null;
+    var qrLoaded = false;
+
+    function loadQrCode() {
+      if (qrLoaded) return;
+      qrLoaded = true;
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', 'pku-ipc://localhost/donation-qr', true);
+      xhr.responseType = 'blob';
+      xhr.onload = function () {
+        if (xhr.status === 200 && qrBlobUrl === null) {
+          qrBlobUrl = URL.createObjectURL(xhr.response);
+          document.getElementById('donation-qr-img').src = qrBlobUrl;
+        }
+      };
+      xhr.send();
+    }
+
+    var qrVisible = false;
+    browserBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      qrVisible = !qrVisible;
+      qrPopup.style.display = qrVisible ? 'block' : 'none';
+      if (qrVisible) loadQrCode();
+    });
+    qrPopup.querySelector('.qr-close-btn').addEventListener('click', function (e) {
+      e.stopPropagation();
+      qrVisible = false;
+      qrPopup.style.display = 'none';
+    });
+    document.addEventListener('click', function () {
+      if (qrVisible) { qrVisible = false; qrPopup.style.display = 'none'; }
+    });
 
     footer.appendChild(dlBtn);
     footer.appendChild(copyBtn);
@@ -294,10 +342,6 @@
       }
     });
 
-    browserBtn.addEventListener('click', function () {
-      ipcSend('open-external', { url: pageUrl });
-    });
-
     console.log('[PKU Course Desktop] Download buttons injected (3-button layout)');
   }
 
@@ -307,19 +351,62 @@
 
     footer.style.cssText =
       'display:flex!important;justify-content:center!important;' +
-      'align-items:center!important;gap:10px!important;margin:10px auto!important;';
+      'align-items:center!important;gap:10px!important;margin:10px auto!important;' +
+      'position:relative!important;';
 
     var browserBtn = document.createElement('button');
     browserBtn.style.cssText =
       'height:40px;border:none;border-radius:6px;font-size:15px;font-weight:bold;' +
       'cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;' +
-      'padding:0 24px;background:#059669;color:#fff;transition:background 0.15s;';
-    browserBtn.innerHTML =
-      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>' +
-      '<span>\u5728\u7CFB\u7EDF\u6D4F\u89C8\u5668\u4E2D\u64AD\u653E\u89C6\u9891</span>';
+      'padding:0 24px;background:#07c160;color:#fff;transition:background 0.15s;' +
+      'position:relative;';
+    browserBtn.innerHTML = '<span>\u2615 \u9001\u6211\u676F\u5496\u5561</span>';
 
-    browserBtn.addEventListener('click', function () {
-      ipcSend('open-external', { url: pageUrl });
+    var qrPopup = document.createElement('div');
+    qrPopup.style.cssText =
+      'display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);' +
+      'background:#fff;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.15);' +
+      'padding:16px;text-align:center;z-index:9999;';
+    qrPopup.innerHTML =
+      '<div style="font-size:13px;color:#6b7280;margin-bottom:8px;">\u626B\u63CF\u4E0B\u65B9\u4E8C\u7EF4\u7801</div>' +
+      '<img id="fallback-donation-qr-img" alt="WeChat Pay" style="width:160px;height:160px;display:block;" />' +
+      '<button class="qr-close-btn" style="' +
+      'position:absolute;top:-8px;right:-8px;width:20px;height:20px;border:none;' +
+      'background:#f3f4f6;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;">\u00D7</button>';
+    browserBtn.appendChild(qrPopup);
+
+    var qrBlobUrl = null;
+    var qrLoaded = false;
+
+    function loadQrCode() {
+      if (qrLoaded) return;
+      qrLoaded = true;
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', 'pku-ipc://localhost/donation-qr', true);
+      xhr.responseType = 'blob';
+      xhr.onload = function () {
+        if (xhr.status === 200 && qrBlobUrl === null) {
+          qrBlobUrl = URL.createObjectURL(xhr.response);
+          document.getElementById('fallback-donation-qr-img').src = qrBlobUrl;
+        }
+      };
+      xhr.send();
+    }
+
+    var qrVisible = false;
+    browserBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      qrVisible = !qrVisible;
+      qrPopup.style.display = qrVisible ? 'block' : 'none';
+      if (qrVisible) loadQrCode();
+    });
+    qrPopup.querySelector('.qr-close-btn').addEventListener('click', function (e) {
+      e.stopPropagation();
+      qrVisible = false;
+      qrPopup.style.display = 'none';
+    });
+    document.addEventListener('click', function () {
+      if (qrVisible) { qrVisible = false; qrPopup.style.display = 'none'; }
     });
 
     footer.appendChild(browserBtn);
