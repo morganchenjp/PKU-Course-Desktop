@@ -83,9 +83,10 @@ async fn start_download(
     task: DownloadTask,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    let settings = state.settings.lock().await.clone();
     let manager = state.download_manager.lock().await;
     manager
-        .start_download(task, app.clone())
+        .start_download(task, app.clone(), settings.extract_audio, settings.audio_format)
         .await
         .map_err(|e| e.to_string())
 }
@@ -325,6 +326,14 @@ async fn browser_download(
     url: String,
     filepath: String,
 ) -> Result<(), String> {
+    // For m3u8 videos the Blackboard API returns .mp4; ensure the filepath has the extension
+    let is_m3u8 = url.contains("downloadVideo.action") || url.contains(".m3u8");
+    let filepath = if is_m3u8 && !filepath.ends_with(".mp4") {
+        format!("{}.mp4", filepath)
+    } else {
+        filepath
+    };
+
     // Ensure parent directory exists
     if let Some(parent) = std::path::Path::new(&filepath).parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("mkdir: {e}"))?;
@@ -610,11 +619,35 @@ async fn browser_download_fallback(
     }
 
     file.flush().map_err(|e| format!("flush: {e}"))?;
+    eprintln!("[browser_download] completed: {task_id} ({downloaded} bytes)");
+
+    // Extract audio if enabled (settings accessed via app state)
+    let (extract_audio, audio_format) = {
+        let settings = app.state::<crate::AppState>().settings.blocking_lock();
+        (settings.extract_audio, settings.audio_format.clone())
+    };
+
+    if extract_audio {
+        let audio_path = format!("{}.{}", filepath, audio_format);
+        eprintln!("[browser_download] extracting audio to: {}", audio_path);
+        match crate::ffmpeg::extract_audio(&filepath, &audio_path, &audio_format).await {
+            Ok(()) => {
+                let _ = app.emit(
+                    "audio-extract-complete",
+                    serde_json::json!({ "taskId": task_id, "audioPath": audio_path }),
+                );
+                eprintln!("[browser_download] audio extracted: {}", audio_path);
+            }
+            Err(e) => {
+                eprintln!("[browser_download] audio extraction failed for {task_id}: {e}");
+            }
+        }
+    }
+
     let _ = app.emit(
         "download-complete",
         serde_json::json!({ "taskId": task_id }),
     );
-    eprintln!("[browser_download] completed: {task_id} ({downloaded} bytes)");
 
     Ok(())
 }

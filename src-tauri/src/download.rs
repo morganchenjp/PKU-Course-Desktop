@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
-use tauri::Emitter;
+use tauri::{Emitter, State};
 use tokio::sync::RwLock;
 use tokio::time::Duration;
 
@@ -74,6 +74,8 @@ impl DownloadManager {
         &self,
         task: DownloadTask,
         app: tauri::AppHandle,
+        extract_audio: bool,
+        audio_format: String,
     ) -> anyhow::Result<()> {
         let client = self.client.clone();
         let active_downloads = self.active_downloads.clone();
@@ -82,7 +84,7 @@ impl DownloadManager {
 
         let handle = tokio::spawn(async move {
             let id = task.id.clone();
-            match download_file(client, task, &app).await {
+            match download_file(client, task, &app, extract_audio, &audio_format).await {
                 Ok(()) => {
                     let _ = app.emit(
                         "download-complete",
@@ -125,6 +127,8 @@ async fn download_file(
     client: Client,
     task: DownloadTask,
     app: &tauri::AppHandle,
+    extract_audio: bool,
+    audio_format: &str,
 ) -> anyhow::Result<()> {
     let url = &task.video_info.download_url;
     let filepath = &task.filepath;
@@ -216,11 +220,36 @@ async fn download_file(
     file.flush()?;
 
     // Handle m3u8 conversion if needed
-    if task.video_info.is_m3u8 {
+    let final_video_path = if task.video_info.is_m3u8 {
         let mp4_path = filepath.replace(".m3u8", ".mp4");
         crate::ffmpeg::convert_m3u8_to_mp4(filepath, &mp4_path, task.video_info.jwt.as_deref())
             .await?;
         tokio::fs::remove_file(filepath).await.ok();
+        mp4_path
+    } else {
+        filepath.to_string()
+    };
+
+    // Extract audio if enabled
+    if extract_audio {
+        let audio_path = final_video_path.replace(
+            final_video_path.rsplit_once('.').unwrap_or((&final_video_path, "")).1,
+            &format!(".{}", audio_format),
+        );
+        eprintln!("[download] extracting audio to: {}", audio_path);
+        match crate::ffmpeg::extract_audio(&final_video_path, &audio_path, audio_format).await {
+            Ok(()) => {
+                let _ = app.emit(
+                    "audio-extract-complete",
+                    serde_json::json!({ "taskId": task_id, "audioPath": audio_path }),
+                );
+                eprintln!("[download] audio extracted: {}", audio_path);
+            }
+            Err(e) => {
+                eprintln!("[download] audio extraction failed for {task_id}: {e}");
+                // Don't fail the download task — audio extraction is non-critical
+            }
+        }
     }
 
     Ok(())

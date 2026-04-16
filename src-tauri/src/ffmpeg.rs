@@ -81,13 +81,13 @@ pub async fn extract_audio(
         .arg("-vn")  // No video
         .arg("-c:a").arg(codec);
     
-    // Add format-specific options
+    // Add format-specific options (medium quality)
     match format.to_lowercase().as_str() {
         "mp3" => {
-            cmd.arg("-q:a").arg("2");  // High quality VBR
+            cmd.arg("-q:a").arg("5");  // Medium quality VBR (~185kbps)
         }
         "aac" => {
-            cmd.arg("-b:a").arg("192k");  // 192kbps bitrate
+            cmd.arg("-b:a").arg("128k");  // 128kbps bitrate (medium)
         }
         _ => {}
     }

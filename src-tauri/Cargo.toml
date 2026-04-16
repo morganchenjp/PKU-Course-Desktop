@@ -1,9 +1,9 @@
 [package]
-name = "PKU Course Desktop"
+name = "pku-course-desktop"
 version = "1.0.0"
-description = "A Rust Tauri-based desktop app for PKU course video download"
+description = "PKU Course Desktop, A Rust Tauri-based desktop app for PKU course video download"
 authors = ["Morgan Chen"]
-edition = "2026"
+edition = "2021"
 rust-version = "1.77.0"
 
 [build-dependencies]
