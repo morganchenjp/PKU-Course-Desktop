@@ -453,14 +453,17 @@ fn browser_download_linux(
                     let app_f = app_clone.clone();
                     let tid_f = task_id_clone.clone();
                     let fp_f = filepath_clone.clone();
+                    let app_state_f = app_f.state::<AppState>();
+                    let (extract_audio, audio_format) = {
+                        let settings = app_state_f.settings.blocking_lock();
+                        (settings.extract_audio, settings.audio_format.clone())
+                    };
+                    drop(app_state_f);
+                    let app_f2 = app_f.clone();
                     download.connect_finished(move |dl| {
                         let received = dl.received_data_length();
                         eprintln!(
                             "[webkit-dl] finished: task={tid_f} bytes={received} dest={fp_f}"
-                        );
-                        let _ = app_f.emit(
-                            "download-complete",
-                            serde_json::json!({ "taskId": tid_f }),
                         );
                         // Re-hide browser-webview if not in browser mode
                         let state = app_f.state::<AppState>();
@@ -469,11 +472,39 @@ fn browser_download_linux(
                             .lock()
                             .map(|m| m.clone())
                             .unwrap_or_default();
+                        drop(state);
                         if mode != "browser" {
                             if let Some(b) = app_f.get_webview("browser-webview") {
                                 let _ = b.hide();
                                 eprintln!("[webkit-dl] browser-webview re-hidden");
                             }
+                        }
+                        // Emit download-complete first, then extract audio asynchronously
+                        let _ = app_f.emit(
+                            "download-complete",
+                            serde_json::json!({ "taskId": tid_f }),
+                        );
+                        if extract_audio {
+                            let fp = fp_f.clone();
+                            let tid = tid_f.clone();
+                            let af = audio_format.clone();
+                            let app_audio = app_f2.clone();
+                            tokio::spawn(async move {
+                                let audio_path = format!("{}.{}", fp, af);
+                                eprintln!("[webkit-dl] extracting audio to: {}", audio_path);
+                                match crate::ffmpeg::extract_audio(&fp, &audio_path, &af).await {
+                                    Ok(()) => {
+                                        let _ = app_audio.emit(
+                                            "audio-extract-complete",
+                                            serde_json::json!({ "taskId": tid, "audioPath": audio_path }),
+                                        );
+                                        eprintln!("[webkit-dl] audio extracted: {}", audio_path);
+                                    }
+                                    Err(e) => {
+                                        eprintln!("[webkit-dl] audio extraction failed for {tid}: {e}");
+                                    }
+                                }
+                            });
                         }
                     });
 
