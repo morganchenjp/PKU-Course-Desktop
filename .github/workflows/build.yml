@@ -54,6 +54,14 @@ jobs:
       - name: Install frontend dependencies
         run: bun install
 
+      - name: Set version from tag
+        run: |
+          VERSION=${VERSION#v}
+          echo "Setting version to $VERSION"
+          node -e "const fs=require('fs'); const c=JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json','utf8')); c.version='$VERSION'; fs.writeFileSync('src-tauri/tauri.conf.json',JSON.stringify(c,null+2));"
+        env:
+          VERSION: ${{ github.ref_name }}
+
       - name: Build and release Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
