@@ -247,7 +247,7 @@
       'padding:16px;text-align:center;z-index:9999;';
     qrPopup.innerHTML =
       '<div style="font-size:13px;color:#6b7280;margin-bottom:8px;">\u626B\u63CF\u4E0B\u65B9\u4E8C\u7EF4\u7801</div>' +
-      '<img id="donation-qr-img" alt="WeChat Pay" style="width:160px;height:160px;display:block;" />' +
+      '<img id="donation-qr-img" alt="WeChat Pay" style="width:320px;height:320px;display:block;" />' +
       '<button class="qr-close-btn" style="' +
       'position:absolute;top:-8px;right:-8px;width:20px;height:20px;border:none;' +
       'background:#f3f4f6;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;">\u00D7</button>';
@@ -369,7 +369,7 @@
       'padding:16px;text-align:center;z-index:9999;';
     qrPopup.innerHTML =
       '<div style="font-size:13px;color:#6b7280;margin-bottom:8px;">\u626B\u63CF\u4E0B\u65B9\u4E8C\u7EF4\u7801</div>' +
-      '<img id="fallback-donation-qr-img" alt="WeChat Pay" style="width:160px;height:160px;display:block;" />' +
+      '<img id="fallback-donation-qr-img" alt="WeChat Pay" style="width:320px;height:320px;display:block;" />' +
       '<button class="qr-close-btn" style="' +
       'position:absolute;top:-8px;right:-8px;width:20px;height:20px;border:none;' +
       'background:#f3f4f6;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;">\u00D7</button>';

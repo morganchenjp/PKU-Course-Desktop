@@ -288,8 +288,8 @@
   }
 
   .donation-popup .qrcode-img {
-    width: 160px;
-    height: 160px;
+    width: 320px;
+    height: 320px;
     display: block;
   }
 

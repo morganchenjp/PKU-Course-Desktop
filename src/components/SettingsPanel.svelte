@@ -143,7 +143,7 @@
         <h3 class="section-title">关于</h3>
         <div class="about-content">
           <p><strong>PKU Course Desktop</strong></p>
-          <p>版本: 0.3.0</p>
+          <p>版本: 1.0.0</p>
           <p>开源北大课程视频下载工具 <a href="https://github.com/morganchenjp/PKU-Course-Desktop/" onclick={(e) => { e.preventDefault(); invoke('open_external_link', { url: 'https://github.com/morganchenjp/PKU-Course-Desktop/' }); }}>
               GitHub</a></p>
           <p>
