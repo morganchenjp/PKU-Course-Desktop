@@ -19,6 +19,9 @@ use std::io::Write;
 
 const START_URL: &str = "https://course.pku.edu.cn";
 
+// Donation QR code PNG baked in at compile time — no runtime file paths needed
+const DONATION_QR_PNG: &[u8] = include_bytes!("../../public/morgan-wechat-qrcode.png");
+
 /// Write a debug message to a log file.
 /// - Linux: $HOME/.local/share/pku-course-desktop/pku-course-desktop.log
 /// - macOS: PKU Course Desktop.app/Contents/MacOS/pku-course-desktop.log 
@@ -862,16 +865,12 @@ fn main() {
                     }
                 }
             } else if uri.contains("/donation-qr") {
-                // Serve the donation QR code PNG (read directly from source tree)
-                let png_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("../public/morgan-wechat-qrcode.png");
-                let png_data = std::fs::read(&png_path)
-                    .expect("failed to read donation QR PNG");
+                // Serve the donation QR code PNG (baked in at compile time)
                 return tauri::http::Response::builder()
                     .status(200)
                     .header("Content-Type", "image/png")
                     .header("Access-Control-Allow-Origin", "*")
-                    .body(png_data)
+                    .body(DONATION_QR_PNG.to_vec())
                     .unwrap();
             }
 
