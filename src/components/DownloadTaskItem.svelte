@@ -106,11 +106,11 @@
           ▶️
         </button>
       {:else if task.status === 'downloading'}
-        <button class="action-btn" onclick={pauseDownload} title="暂停">
+        <button class="action-btn" disabled title="暂停/恢复不受支持（服务器未实现 Accept-Ranges）">
           ⏸️
         </button>
       {:else if task.status === 'paused'}
-        <button class="action-btn" onclick={startDownload} title="继续">
+        <button class="action-btn" disabled title="暂停/恢复不受支持（服务器未实现 Accept-Ranges）">
           ▶️
         </button>
       {:else if task.status === 'error'}
