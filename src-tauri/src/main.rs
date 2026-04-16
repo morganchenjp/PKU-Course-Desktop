@@ -260,9 +260,11 @@ fn do_show_main_view(app: &tauri::AppHandle, view: &str) -> Result<(), String> {
     let main_window = app.get_window("main").ok_or("Main window not found")?;
     let main_webview = app.get_webview("main").ok_or("Main webview not found")?;
 
-    // Move browser off-screen instead of hide() to avoid Z-order issues on GTK.
-    // hide() doesn't lower Z-order on WebKitGTK, so the hidden browser can still block clicks.
+    // Hide browser and move off-screen as belt-and-suspenders.
+    // hide() alone works on macOS/Windows; on Linux/WebKitGTK we also move off-screen
+    // since hide() may not reliably lower Z-order in all configurations.
     if let Some(browser) = app.get_webview("browser-webview") {
+        let _ = browser.hide();
         let _ = browser.set_position(LogicalPosition::new(10000.0, 48.0));
     }
 

@@ -18,7 +18,7 @@ export const settings = writable<AppSettings>({
   downloadPath: '',
   namingPattern: '{courseName} - {subTitle} - {lecturerName}',
   autoDownload: false,
-  maxConcurrentDownloads: 3,
+  maxConcurrentDownloads: 1,
   defaultQuality: 'highest',
   extractAudio: false,
   audioFormat: 'mp3',

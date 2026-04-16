@@ -33,7 +33,7 @@
         downloadPath: '',
         namingPattern: '{courseName} - {subTitle} - {lecturerName}',
         autoDownload: false,
-        maxConcurrentDownloads: 3,
+        maxConcurrentDownloads: 1,
         defaultQuality: 'highest',
         extractAudio: false,
         audioFormat: 'mp3',
@@ -88,7 +88,7 @@
             id="max-concurrent"
             type="number" 
             min="1" 
-            max="10" 
+            max="2" 
             bind:value={$settings.maxConcurrentDownloads}
           />
         </div>
@@ -149,7 +149,7 @@
           <p>
             Inspired by <a href="https://github.com/zhuozhiyongde/PKU-Art" onclick={(e) => { e.preventDefault(); invoke('open_external_link', { url: 'https://github.com/zhuozhiyongde/PKU-Art' }); }}>
               PKU-Art project
-            </a>
+            </a>,Thanks.
           </p>
         </div>
       </section>
