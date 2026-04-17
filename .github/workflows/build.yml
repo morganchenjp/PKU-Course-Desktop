@@ -4,6 +4,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
 
 jobs:
   release:
@@ -61,7 +66,7 @@ jobs:
           echo "Setting version to $VERSION"
           node -e "const fs=require('fs'); const c=JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json','utf8')); c.version='$VERSION'; fs.writeFileSync('src-tauri/tauri.conf.json',JSON.stringify(c,null+2));"
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ github.event.inputs.version || github.ref_name }}
 
       - name: Build and release Tauri app
         uses: tauri-apps/tauri-action@v0
