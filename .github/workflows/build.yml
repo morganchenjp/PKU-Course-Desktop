@@ -55,6 +55,7 @@ jobs:
         run: bun install
 
       - name: Set version from tag
+        shell: bash
         run: |
           VERSION=${VERSION#v}
           echo "Setting version to $VERSION"
