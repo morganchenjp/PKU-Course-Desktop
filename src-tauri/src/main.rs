@@ -62,7 +62,7 @@ struct PendingBrowserDownload {
 // App state
 pub struct AppState {
     download_manager: Mutex<DownloadManager>,
-    settings: Mutex<AppSettings>,
+    settings: StdMutex<AppSettings>,
     /// Tracks which view mode is active so the resize handler can reposition webviews.
     /// Values: "browser", "main"
     current_view_mode: StdMutex<String>,
@@ -83,7 +83,7 @@ async fn start_download(
     task: DownloadTask,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let settings = state.settings.lock().await.clone();
+    let settings = state.settings.lock().unwrap().clone();
     let manager = state.download_manager.lock().await;
     manager
         .start_download(task, app.clone(), settings.extract_audio, settings.audio_format)
@@ -145,8 +145,20 @@ fn load_settings() -> Result<AppSettings, String> {
 }
 
 #[tauri::command]
-fn save_settings(settings: AppSettings) -> Result<(), String> {
-    settings::save_settings(&settings).map_err(|e| e.to_string())
+fn save_settings(settings: AppSettings, state: State<'_, AppState>) -> Result<(), String> {
+    eprintln!(
+        "[save_settings] received: extract_audio={}, audio_format={}",
+        settings.extract_audio, settings.audio_format
+    );
+    settings::save_settings(&settings).map_err(|e| e.to_string())?;
+    // Also update in-memory state so the change takes effect immediately
+    let mut current = state.settings.lock().unwrap();
+    *current = settings.clone();
+    eprintln!(
+        "[save_settings] in-memory updated: extract_audio={}, audio_format={}",
+        current.extract_audio, current.audio_format
+    );
+    Ok(())
 }
 
 #[tauri::command]
@@ -455,7 +467,11 @@ fn browser_download_linux(
                     let fp_f = filepath_clone.clone();
                     let app_state_f = app_f.state::<AppState>();
                     let (extract_audio, audio_format) = {
-                        let settings = app_state_f.settings.blocking_lock();
+                        let settings = app_state_f.settings.lock().unwrap();
+                        eprintln!(
+                            "[webkit-dl] settings read: extract_audio={}, audio_format={}",
+                            settings.extract_audio, settings.audio_format
+                        );
                         (settings.extract_audio, settings.audio_format.clone())
                     };
                     drop(app_state_f);
@@ -464,6 +480,10 @@ fn browser_download_linux(
                         let received = dl.received_data_length();
                         eprintln!(
                             "[webkit-dl] finished: task={tid_f} bytes={received} dest={fp_f}"
+                        );
+                        eprintln!(
+                            "[webkit-dl] captured settings: extract_audio={}, audio_format={}",
+                            extract_audio, audio_format
                         );
                         // Re-hide browser-webview if not in browser mode
                         let state = app_f.state::<AppState>();
@@ -489,22 +509,30 @@ fn browser_download_linux(
                             let tid = tid_f.clone();
                             let af = audio_format.clone();
                             let app_audio = app_f2.clone();
-                            tokio::spawn(async move {
+                            eprintln!("[webkit-dl] spawning audio extraction task for: {}", fp);
+                            // Spawn a dedicated thread with its own Tokio runtime — needed because
+                            // GTK callbacks run on the main thread where there is no Tokio runtime.
+                            std::thread::spawn(move || {
+                                let rt = tokio::runtime::Runtime::new().unwrap();
+                                rt.block_on(async move {
                                 let audio_path = format!("{}.{}", fp, af);
-                                eprintln!("[webkit-dl] extracting audio to: {}", audio_path);
+                                eprintln!("[webkit-dl] [async] starting audio extraction to: {}", audio_path);
                                 match crate::ffmpeg::extract_audio(&fp, &audio_path, &af).await {
                                     Ok(()) => {
                                         let _ = app_audio.emit(
                                             "audio-extract-complete",
                                             serde_json::json!({ "taskId": tid, "audioPath": audio_path }),
                                         );
-                                        eprintln!("[webkit-dl] audio extracted: {}", audio_path);
+                                        eprintln!("[webkit-dl] [async] audio extracted successfully: {}", audio_path);
                                     }
                                     Err(e) => {
-                                        eprintln!("[webkit-dl] audio extraction failed for {tid}: {e}");
+                                        eprintln!("[webkit-dl] [async] audio extraction failed for {tid}: {e}");
                                     }
                                 }
+                                });
                             });
+                        } else {
+                            eprintln!("[webkit-dl] extract_audio is false, skipping audio extraction");
                         }
                     });
 
@@ -654,7 +682,11 @@ async fn browser_download_fallback(
 
     // Extract audio if enabled (settings accessed via app state)
     let (extract_audio, audio_format) = {
-        let settings = app.state::<crate::AppState>().settings.blocking_lock();
+        let settings = app.state::<crate::AppState>().settings.lock().unwrap();
+        eprintln!(
+            "[browser_download] settings read: extract_audio={}, audio_format={}",
+            settings.extract_audio, settings.audio_format
+        );
         (settings.extract_audio, settings.audio_format.clone())
     };
 
@@ -840,7 +872,7 @@ fn main() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(AppState {
             download_manager: Mutex::new(DownloadManager::new()),
-            settings: Mutex::new(AppSettings::default()),
+            settings: StdMutex::new(AppSettings::default()),
             current_view_mode: StdMutex::new("browser".to_string()),
             pending_downloads: StdMutex::new(HashMap::new()),
         })
@@ -948,7 +980,7 @@ fn main() {
             // Load settings on startup
             if let Ok(settings) = settings::load_settings() {
                 let state = app.state::<AppState>();
-                let mut app_settings = state.settings.blocking_lock();
+                let mut app_settings = state.settings.lock().unwrap();
                 *app_settings = settings;
             }
 

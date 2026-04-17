@@ -231,6 +231,7 @@ async fn download_file(
     };
 
     // Extract audio if enabled
+    eprintln!("[download] extract_audio={}, audio_format={}", extract_audio, audio_format);
     if extract_audio {
         let audio_path = final_video_path.replace(
             final_video_path.rsplit_once('.').unwrap_or((&final_video_path, "")).1,
