@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
-use tauri::{Emitter, State};
+use tauri::Emitter;
 use tokio::sync::RwLock;
 use tokio::time::Duration;
 

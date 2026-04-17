@@ -682,7 +682,8 @@ async fn browser_download_fallback(
 
     // Extract audio if enabled (settings accessed via app state)
     let (extract_audio, audio_format) = {
-        let settings = app.state::<crate::AppState>().settings.lock().unwrap();
+        let state = app.state::<crate::AppState>();
+        let settings = state.settings.lock().unwrap();
         eprintln!(
             "[browser_download] settings read: extract_audio={}, audio_format={}",
             settings.extract_audio, settings.audio_format

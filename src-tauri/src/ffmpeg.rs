@@ -121,27 +121,29 @@ async fn is_ffmpeg_available() -> bool {
         .unwrap_or(false)
 }
 
+/*
 /// Download and bundle ffmpeg binary (optional enhancement)
 pub async fn ensure_ffmpeg() -> anyhow::Result<String> {
     // First check if ffmpeg is in PATH
     if is_ffmpeg_available().await {
         return Ok("ffmpeg".to_string());
     }
-    
+
     // Check for bundled ffmpeg
     let bundled_paths = [
         "./ffmpeg/ffmpeg",
         "./ffmpeg.exe",
         "../Resources/ffmpeg",
     ];
-    
+
     for path in &bundled_paths {
         if tokio::fs::metadata(path).await.is_ok() {
             return Ok(path.to_string());
         }
     }
-    
+
     Err(anyhow::anyhow!(
         "FFmpeg not found. Please install FFmpeg or bundle it with the application."
     ))
 }
+*/
