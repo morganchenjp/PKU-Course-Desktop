@@ -21,15 +21,23 @@ jobs:
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
             rust_target: 'aarch64-apple-darwin'
+            os_label: 'Mac'
+            artifact_suffix: 'darwin_arm64'
           - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
             rust_target: 'x86_64-apple-darwin'
+            os_label: 'Mac'
+            artifact_suffix: 'darwin_x64'
           - platform: 'ubuntu-22.04'
             args: ''
             rust_target: ''
+            os_label: 'Linux'
+            artifact_suffix: 'linux_amd64'
           - platform: 'windows-latest'
             args: ''
             rust_target: ''
+            os_label: 'Win10'
+            artifact_suffix: 'windows_x64'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -75,6 +83,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'PKU Course Desktop ${{ github.ref_name }}'
+          releaseAssetNamePattern: '${{ env.VERSION }}_${{ matrix.os_label }}_${{ matrix.artifact_suffix }}{{ ext }}'
           releaseBody: |
             ## PKU Course Desktop ${{ github.ref_name }}
 
