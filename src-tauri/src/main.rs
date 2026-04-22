@@ -22,6 +22,50 @@ const START_URL: &str = "https://course.pku.edu.cn";
 // Donation QR code PNG baked in at compile time — no runtime file paths needed
 const DONATION_QR_PNG: &[u8] = include_bytes!("../../public/morgan-wechat-qrcode.png");
 
+/// IPC bridge HTML page — loaded in a hidden iframe inside the browser webview.
+/// The parent page (https://course.pku.edu.cn) sends messages to this iframe
+/// via postMessage, and the iframe forwards them to Rust via XHR to the
+/// pku-ipc:// scheme. This bypasses macOS WKWebView mixed-content blocking
+/// which prevents XHR from HTTPS pages to custom schemes.
+const IPC_BRIDGE_HTML: &str = r#"<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>PKU IPC Bridge</title>
+<script>
+(function() {
+  'use strict';
+  var ALLOWED_ORIGINS = ['https://course.pku.edu.cn', 'https://onlineroomse.pku.edu.cn'];
+  function isAllowedOrigin(origin) {
+    if (!origin) return false;
+    for (var i = 0; i < ALLOWED_ORIGINS.length; i++) {
+      if (origin === ALLOWED_ORIGINS[i]) return true;
+    }
+    return /\.pku\.edu\.cn$/.test(origin);
+  }
+  window.addEventListener('message', function(event) {
+    if (!isAllowedOrigin(event.origin)) {
+      console.warn('[ipc-bridge] rejected message from', event.origin);
+      return;
+    }
+    if (event.data && event.data.type === 'pku-desktop-ipc') {
+      var path = event.data.path;
+      var data = event.data.data;
+      var nocache = '&_=' + Date.now() + '.' + Math.random();
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', 'pku-ipc://localhost/' + path + nocache, true);
+      xhr.send(data ? JSON.stringify(data) : null);
+    }
+  });
+  if (window.parent !== window) {
+    window.parent.postMessage({ type: 'pku-desktop-bridge-ready' }, '*');
+  }
+})();
+</script>
+</head>
+<body></body>
+</html>"#;
+
 /// Write a debug message to a log file.
 /// - Linux: $HOME/.local/share/pku-course-desktop/pku-course-desktop.log
 /// - macOS: PKU Course Desktop.app/Contents/MacOS/pku-course-desktop.log 
@@ -254,6 +298,9 @@ fn show_browser_view(app: tauri::AppHandle, state: State<'_, AppState>) -> Resul
         .map_err(|e| format!("set_size browser: {e}"))?;
 
     main_webview.hide().map_err(|e| format!("hide main: {e}"))?;
+    // Belt-and-suspenders: move off-screen as well since macOS child-webview
+    // hide() alone may not reliably lower the view from the responder chain.
+    let _ = main_webview.set_position(LogicalPosition::new(10000.0, 0.0));
     browser.show().map_err(|e| format!("show browser: {e}"))?;
     let _ = browser.set_focus(); // Ensure browser webview receives input focus
 
@@ -302,9 +349,31 @@ fn do_show_main_view(app: &tauri::AppHandle, view: &str) -> Result<(), String> {
 
     debug_log("do_show_main_view: hide(browser) + show(main) complete");
 
-    // Tell the Svelte app which view to show
-    app.emit("switch-to-main", serde_json::json!({ "view": view }))
-        .map_err(|e| format!("emit switch-to-main: {e}"))?;
+    // Tell the Svelte app which view to show.
+    // On macOS/WKWebView a hidden webview has its JS execution paused.
+    // After show() it takes a short time for the JS event loop to resume.
+    // Emitting immediately can cause the event to be lost, so we defer.
+    let app_clone = app.clone();
+    let view_clone = view.to_string();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        let state = app_clone.state::<AppState>();
+        let is_main = state
+            .current_view_mode
+            .lock()
+            .map(|m| *m == "main")
+            .unwrap_or(false);
+        if is_main {
+            let _ = app_clone.emit(
+                "switch-to-main",
+                serde_json::json!({ "view": view_clone }),
+            );
+            eprintln!(
+                "[Rust] switch-to-main emitted (deferred): view={}",
+                view_clone
+            );
+        }
+    });
 
     eprintln!("[Rust] show_main_view: view={}", view);
     Ok(())
@@ -916,6 +985,16 @@ fn main() {
             }
 
             let uri = request.uri().to_string();
+
+            // Serve the IPC bridge HTML page for the iframe-based cross-platform IPC
+            if uri.contains("/bridge.html") {
+                return tauri::http::Response::builder()
+                    .status(200)
+                    .header("Content-Type", "text/html; charset=utf-8")
+                    .header("Access-Control-Allow-Origin", "*")
+                    .body(IPC_BRIDGE_HTML.as_bytes().to_vec())
+                    .unwrap();
+            }
 
             if uri.contains("/download-diag") {
                 let body_str = String::from_utf8_lossy(request.body());

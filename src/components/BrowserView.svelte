@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
-  import { browserState, currentVideoInfo } from "../lib/store";
+  import { browserState, currentVideoInfo, currentView } from "../lib/store";
   import type { VideoInfo } from "../lib/types";
   import VideoInfoCard from "./VideoInfoCard.svelte";
 
@@ -62,6 +62,7 @@
 
   function goToDownloads() {
     invoke('show_main_view', { view: 'downloads' }).catch(() => {});
+    currentView.set('downloads');
   }
 </script>
 

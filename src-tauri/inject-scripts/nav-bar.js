@@ -31,11 +31,39 @@
     console.warn('[' + ts + ']', args.join(' '));
   }
 
-  // ─── IPC helper: send commands to Rust via custom URI scheme ───
-  // Add cache-busting query param so WebKitGTK doesn't replay a cached response
-  function ipcSend(path, data) {
+  // ─── Cross-platform IPC bridge ───
+  // macOS WKWebView blocks XHR from HTTPS pages to custom URI schemes.
+  // We load a same-origin iframe at pku-ipc://localhost/bridge.html which
+  // can make XHR to pku-ipc:// without mixed-content restrictions. The
+  // parent page communicates with the iframe via postMessage.
+  var bridgeReady = false;
+  var pendingQueue = [];
+  var bridgeIframe = null;
+
+  function initBridge() {
+    if (document.getElementById('pku-desktop-bridge')) return;
+    bridgeIframe = document.createElement('iframe');
+    bridgeIframe.id = 'pku-desktop-bridge';
+    bridgeIframe.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden;';
+    bridgeIframe.src = 'pku-ipc://localhost/bridge.html';
+    if (document.body) {
+      document.body.appendChild(bridgeIframe);
+    } else {
+      document.documentElement.appendChild(bridgeIframe);
+    }
+  }
+
+  function sendViaBridge(path, data) {
+    if (!bridgeIframe || !bridgeIframe.contentWindow) return;
+    bridgeIframe.contentWindow.postMessage({
+      type: 'pku-desktop-ipc',
+      path: path,
+      data: data
+    }, '*');
+  }
+
+  function tryDirectXhr(path, data) {
     var nocache = '&_=' + Date.now() + '.' + Math.random();
-    log('[nav-bar] ipcSend called:', path);
     try {
       var xhr = new XMLHttpRequest();
       var url = 'pku-ipc://localhost/' + path + nocache;
@@ -58,6 +86,37 @@
       log('[nav-bar] IPC send exception:', path, e);
     }
   }
+
+  // ─── IPC helper: send commands to Rust ───
+  function ipcSend(path, data) {
+    log('[nav-bar] ipcSend called:', path);
+    // Use iframe bridge when available (all platforms, especially macOS)
+    if (bridgeReady) {
+      sendViaBridge(path, data);
+      return;
+    }
+    // Bridge exists but not ready yet — queue and flush later
+    if (bridgeIframe) {
+      pendingQueue.push({ path: path, data: data });
+      return;
+    }
+    // Bridge not created yet — create it, queue, and try direct XHR as fallback
+    initBridge();
+    pendingQueue.push({ path: path, data: data });
+    tryDirectXhr(path, data);
+  }
+
+  // Flush queued messages once the bridge signals ready
+  window.addEventListener('message', function (event) {
+    if (event.data && event.data.type === 'pku-desktop-bridge-ready') {
+      bridgeReady = true;
+      log('[nav-bar] IPC bridge ready, flushing', pendingQueue.length, 'queued messages');
+      while (pendingQueue.length > 0) {
+        var item = pendingQueue.shift();
+        sendViaBridge(item.path, item.data);
+      }
+    }
+  });
 
   // ─── Inject Styles ───
   var style = document.createElement('style');
@@ -160,9 +219,13 @@
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', insertNavbar);
+    document.addEventListener('DOMContentLoaded', function() {
+      insertNavbar();
+      initBridge();
+    });
   } else {
     insertNavbar();
+    initBridge();
   }
 
   // ─── Button Event Handlers ───
