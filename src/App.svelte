@@ -5,9 +5,9 @@
   import BrowserView from "./components/BrowserView.svelte";
   import DownloadPanel from "./components/DownloadPanel.svelte";
   import SettingsPanel from "./components/SettingsPanel.svelte";
-  import { currentView, theme, downloadTasks, settings } from "./lib/store";
+  import { currentView, theme, downloadTasks } from "./lib/store";
   import { initTheme } from "./lib/theme";
-  import { createDownloadTask } from "./lib/download-utils";
+  import { enqueueDownload, startNextPendingDownload } from "./lib/download-queue";
 
   let unlistenSwitchToMain: (() => void) | null = null;
   let isTransitioning = false;
@@ -48,25 +48,7 @@
     // (download button on video player page, or nav-bar toast "添加到下载队列").
     unlistenAddDownload = await listen("add-download-from-browser", async (event: any) => {
       try {
-        const videoInfo = event.payload;
-        const task = await createDownloadTask(videoInfo);
-        const downloadingCount = $downloadTasks.filter(t => t.status === 'downloading').length;
-        if (downloadingCount < $settings.maxConcurrentDownloads) {
-          // Under limit: start immediately
-          const startedTask = { ...task, status: 'downloading' as const, startedAt: Date.now() };
-          downloadTasks.update(tasks => [...tasks, startedTask]);
-          console.log('[App] Download task added, starting:', task.filename);
-          await invoke('browser_download', {
-            taskId: startedTask.id,
-            url: startedTask.videoInfo.downloadUrl,
-            filepath: startedTask.filepath,
-          });
-        } else {
-          // At limit: queue as pending
-          const pendingTask = { ...task, status: 'pending' as const };
-          downloadTasks.update(tasks => [...tasks, pendingTask]);
-          console.log('[App] Download task added to queue (max concurrent reached):', task.filename);
-        }
+        await enqueueDownload(event.payload);
       } catch (e) {
         console.error('[App] Failed to add/start download task:', e);
       }
@@ -118,35 +100,6 @@
     if (unlistenDlComplete) unlistenDlComplete();
     if (unlistenDlError) unlistenDlError();
   });
-
-  async function startNextPendingDownload() {
-    let tasks_snapshot: typeof $downloadTasks = [];
-    downloadTasks.update(tasks => {
-      tasks_snapshot = tasks;
-      return tasks;
-    });
-    const downloadingCount = tasks_snapshot.filter(t => t.status === 'downloading').length;
-    if (downloadingCount >= $settings.maxConcurrentDownloads) return;
-    const pending = tasks_snapshot.find(t => t.status === 'pending');
-    if (!pending) return;
-    downloadTasks.update(tasks =>
-      tasks.map(t =>
-        t.id === pending.id
-          ? { ...t, status: 'downloading' as const, startedAt: Date.now() }
-          : t
-      )
-    );
-    try {
-      await invoke('browser_download', {
-        taskId: pending.id,
-        url: pending.videoInfo.downloadUrl,
-        filepath: pending.filepath,
-      });
-      console.log('[App] Started queued download:', pending.filename);
-    } catch (e) {
-      console.error('[App] Failed to start queued download:', e);
-    }
-  }
 
   async function switchToBrowser() {
     console.log('[DEBUG Svelte] switchToBrowser clicked');

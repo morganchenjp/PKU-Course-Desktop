@@ -24,18 +24,7 @@
   
   async function saveSettings() {
     try {
-      // Convert camelCase JS fields to snake_case for Rust AppSettings
-      const snakeSettings = {
-        download_path: $settings.downloadPath,
-        naming_pattern: $settings.namingPattern,
-        auto_download: $settings.autoDownload,
-        max_concurrent_downloads: $settings.maxConcurrentDownloads,
-        default_quality: $settings.defaultQuality,
-        extract_audio: $settings.extractAudio,
-        audio_format: $settings.audioFormat,
-      };
-      console.log('[SettingsPanel] saving extract_audio:', $settings.extractAudio);
-      await invoke('save_settings', { settings: snakeSettings });
+      await invoke('save_settings', { settings: $settings });
       alert("设置已保存");
     } catch (e) {
       console.error('[SettingsPanel] save_settings failed:', e);

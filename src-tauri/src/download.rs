@@ -10,6 +10,9 @@ use tauri::Emitter;
 use tokio::sync::RwLock;
 use tokio::time::Duration;
 
+use crate::util::fmt::{fmt_duration, fmt_speed};
+use crate::webview::download_native::shared::emit_audio_extract_complete;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VideoInfo {
@@ -208,8 +211,8 @@ async fn download_file(
                 serde_json::json!({
                     "taskId": task_id,
                     "progress": progress,
-                    "speed": format_speed(speed_bps),
-                    "eta": format_duration(eta_secs),
+                    "speed": fmt_speed(speed_bps),
+                    "eta": fmt_duration(eta_secs),
                 }),
             );
 
@@ -231,19 +234,21 @@ async fn download_file(
     };
 
     // Extract audio if enabled
-    eprintln!("[download] extract_audio={}, audio_format={}", extract_audio, audio_format);
+    eprintln!(
+        "[download] extract_audio={}, audio_format={}",
+        extract_audio, audio_format
+    );
     if extract_audio {
-        let audio_path = final_video_path.replace(
-            final_video_path.rsplit_once('.').unwrap_or((&final_video_path, "")).1,
-            &format!(".{}", audio_format),
-        );
+        // Use Path::with_extension so a dot somewhere in the parent directory
+        // (e.g. ~/.local/Downloads/foo) does not corrupt the audio path.
+        let audio_path = Path::new(&final_video_path)
+            .with_extension(audio_format)
+            .to_string_lossy()
+            .into_owned();
         eprintln!("[download] extracting audio to: {}", audio_path);
         match crate::ffmpeg::extract_audio(&final_video_path, &audio_path, audio_format).await {
             Ok(()) => {
-                let _ = app.emit(
-                    "audio-extract-complete",
-                    serde_json::json!({ "taskId": task_id, "audioPath": audio_path }),
-                );
+                emit_audio_extract_complete(app, task_id, &audio_path);
                 eprintln!("[download] audio extracted: {}", audio_path);
             }
             Err(e) => {
@@ -254,24 +259,4 @@ async fn download_file(
     }
 
     Ok(())
-}
-
-fn format_speed(bytes_per_sec: f64) -> String {
-    if bytes_per_sec > 1024.0 * 1024.0 {
-        format!("{:.2} MB/s", bytes_per_sec / (1024.0 * 1024.0))
-    } else if bytes_per_sec > 1024.0 {
-        format!("{:.2} KB/s", bytes_per_sec / 1024.0)
-    } else {
-        format!("{:.0} B/s", bytes_per_sec)
-    }
-}
-
-fn format_duration(seconds: f64) -> String {
-    if seconds < 60.0 {
-        format!("{:.0}s", seconds)
-    } else if seconds < 3600.0 {
-        format!("{:.0}m {:.0}s", seconds / 60.0, seconds % 60.0)
-    } else {
-        format!("{:.0}h {:.0}m", seconds / 3600.0, (seconds % 3600.0) / 60.0)
-    }
 }
