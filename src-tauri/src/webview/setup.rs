@@ -12,7 +12,7 @@ use url::Url;
 
 use crate::settings;
 use crate::state::AppState;
-use crate::webview::layout::handle_window_resize;
+use crate::webview::layout::{handle_window_resize, show_browser_view};
 use crate::webview::on_download::handle_download_event;
 
 const START_URL: &str = "https://course.pku.edu.cn";
@@ -92,6 +92,27 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     main_window.on_window_event(move |event| {
         if let tauri::WindowEvent::Resized(size) = event {
             handle_window_resize(&app_handle, &mw, *size);
+        }
+    });
+
+    // ─── Force-show browser-webview from Rust at startup ───
+    // Historically the browser-webview was shown by the Svelte `App.svelte`
+    // onMount handler invoking `show_browser_view`. On Windows/WebView2 the
+    // main webview's JS execution can be throttled while it is hidden
+    // (`main_webview.hide()` above), which means `onMount` may never fire and
+    // the user sees an empty white window. Driving the initial show from Rust
+    // bypasses the frontend bootstrap entirely. Default `ViewMode` is
+    // `Browser`, so this is the correct initial state on every platform.
+    // The Svelte-side call is left in place; `show_browser_view` is idempotent.
+    let app_handle_init = app.handle().clone();
+    std::thread::spawn(move || {
+        // Small delay so the browser-webview has finished initial layout
+        // before we call show()/set_position(). Mirrors the 150 ms pattern
+        // used by `do_show_main_view`.
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        match show_browser_view(&app_handle_init) {
+            Ok(()) => eprintln!("[Rust] startup show_browser_view: OK"),
+            Err(e) => eprintln!("[Rust] startup show_browser_view failed: {e}"),
         }
     });
 
