@@ -36,10 +36,13 @@
   // We load a same-origin iframe at pku-ipc://localhost/bridge.html which
   // can make XHR to pku-ipc:// without mixed-content restrictions. The
   // parent page communicates with the iframe via postMessage.
-  // Detect WebView2 (Windows). On WebView2 we bypass the bridge and always
-  // use the hidden-iframe fallback, because same-origin XHR from the bridge
-  // iframe to the custom scheme may still be blocked by CORB.
+  // Detect WebView2 (Windows). On WebView2 the raw pku-ipc:// scheme is
+  // not intercepted for iframe requests, and mixed-content blocks XHR from
+  // HTTPS to the raw custom scheme. Tauri internally maps custom protocols
+  // to https://<scheme>.localhost/ when use_https_scheme(true) is set on
+  // the webview. We use that https:// URL for all IPC on WebView2.
   var isWebView2 = !!(window.chrome && window.chrome.webview);
+  var ipcBaseUrl = isWebView2 ? 'https://pku-ipc.localhost/' : 'pku-ipc://localhost/';
 
   var bridgeReady = false;
   var pendingQueue = [];
@@ -68,38 +71,37 @@
   }
 
   // ─── Fallback IPC transport ───
-  // WebView2 on Windows blocks XHR from HTTPS pages to custom URI schemes
-  // (mixed-content / CORB).  Navigation requests to the same custom scheme
-  // are NOT blocked, so we use a short-lived hidden iframe as the transport.
-  // The Rust WebResourceRequested handler fires for the iframe src load just
-  // as it would for an XHR.  The bridge-iframe path (above) is still the
-  // primary mechanism on macOS / Linux; this path acts as the fallback.
+  // On WebView2 (Windows) we send a direct XHR to the https:// workaround
+  // URL. Tauri's WebResourceRequested handler intercepts it and routes to
+  // our Rust handler. On macOS / Linux this path is a fallback when the
+  // bridge iframe is not ready yet.
   function tryDirectXhr(path, data) {
     var nocache = '&_=' + Date.now() + '.' + Math.random();
-    var url = 'pku-ipc://localhost/' + path + nocache;
-    log('[nav-bar] iframe-fallback:', url);
+    var url = ipcBaseUrl + path + nocache;
+    log('[nav-bar] direct-xhr:', url);
 
-    var iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden;';
-    iframe.src = url;
-
-    var parent = document.body || document.documentElement;
-    if (parent) parent.appendChild(iframe);
-
-    // Remove after the request has been dispatched
-    setTimeout(function () {
-      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-    }, 1000);
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open(data ? 'POST' : 'GET', url, true);
+      if (data) {
+        xhr.setRequestHeader('Content-Type', 'application/json');
+      }
+      xhr.send(data ? (typeof data === 'string' ? data : JSON.stringify(data)) : null);
+    } catch (e) {
+      log('[nav-bar] XHR error:', e);
+    }
   }
 
   // ─── IPC helper: send commands to Rust ───
   function ipcSend(path, data) {
     log('[nav-bar] ipcSend called:', path);
-    // Use iframe bridge when available (macOS / Linux).
-    // On WebView2 (Windows) we skip the bridge and always use the iframe
-    // fallback because postMessage / same-origin XHR inside the bridge may
-    // still be silently blocked.
-    if (!isWebView2 && bridgeReady) {
+    // WebView2: always use direct XHR with the https workaround URL.
+    if (isWebView2) {
+      tryDirectXhr(path, data);
+      return;
+    }
+    // macOS / Linux: use iframe bridge when available
+    if (bridgeReady) {
       sendViaBridge(path, data);
       return;
     }

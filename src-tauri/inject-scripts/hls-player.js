@@ -17,12 +17,15 @@
   // ═══════════════════════════════════════════════════════════════════
   // IPC helper (same pattern as nav-bar.js / video-detector.js)
   // ═══════════════════════════════════════════════════════════════════
+  var isWebView2 = !!(window.chrome && window.chrome.webview);
+  var ipcBaseUrl = isWebView2 ? 'https://pku-ipc.localhost/' : 'pku-ipc://localhost/';
+
   function ipcSend(path, data) {
     try {
       var xhr = new XMLHttpRequest();
-      var url = 'pku-ipc://localhost/' + path;
-      xhr.open(data ? 'POST' : 'GET', url, true);
+      xhr.open(data ? 'POST' : 'GET', ipcBaseUrl + path, true);
       if (data) {
+        xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.send(typeof data === 'string' ? data : JSON.stringify(data));
       } else {
         xhr.send();

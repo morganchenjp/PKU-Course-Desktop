@@ -56,7 +56,8 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     .initialization_script(video_detector_js)
     .initialization_script(hls_min_js)
     .initialization_script(hls_player_js)
-    .on_download(|webview, event| handle_download_event(&webview, event));
+    .on_download(|webview, event| handle_download_event(&webview, event))
+    .use_https_scheme(true);
 
     match main_window.add_child(
         builder,

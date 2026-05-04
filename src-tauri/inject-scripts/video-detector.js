@@ -18,6 +18,10 @@
 (function () {
   'use strict';
 
+  // WebView2 (Windows) uses the https://<scheme>.localhost/ workaround.
+  var isWebView2 = !!(window.chrome && window.chrome.webview);
+  var ipcBaseUrl = isWebView2 ? 'https://pku-ipc.localhost/' : 'pku-ipc://localhost/';
+
   // ═══════════════════════════════════════════════════════════════════
   // Phase 1: canPlayType override (runs in ALL frames, including iframes)
   // This must execute before any page script checks HLS support.
@@ -55,16 +59,17 @@
   function ipcSend(path, data) {
     var payload = (typeof data === 'string') ? data : JSON.stringify(data);
 
-    // Channel 1: direct custom protocol XHR
+    // Channel 1: direct custom protocol XHR (uses https workaround on WebView2)
     try {
       var xhr = new XMLHttpRequest();
-      xhr.open(data ? 'POST' : 'GET', 'pku-ipc://localhost/' + path, true);
+      xhr.open(data ? 'POST' : 'GET', ipcBaseUrl + path, true);
+      if (data) { xhr.setRequestHeader('Content-Type', 'application/json'); }
       if (data) { xhr.send(payload); } else { xhr.send(); }
     } catch (e) {
       // Expected to fail from cross-origin iframe; relay handles it.
     }
 
-    // Channel 2: postMessage relay to top frame (nav-bar.js forwards to pku-ipc://)
+    // Channel 2: postMessage relay to top frame (nav-bar.js forwards to Rust)
     try {
       if (window.self !== window.top) {
         window.top.postMessage({ type: 'pku-desktop-ipc', path: path, data: data }, '*');
@@ -261,7 +266,7 @@
       if (qrLoaded) return;
       qrLoaded = true;
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', 'pku-ipc://localhost/donation-qr', true);
+      xhr.open('GET', 'ipcBaseUrl + 'donation-qr'', true);
       xhr.responseType = 'blob';
       xhr.onload = function () {
         if (xhr.status === 200 && qrBlobUrl === null) {
@@ -382,7 +387,7 @@
       if (qrLoaded) return;
       qrLoaded = true;
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', 'pku-ipc://localhost/donation-qr', true);
+      xhr.open('GET', 'ipcBaseUrl + 'donation-qr'', true);
       xhr.responseType = 'blob';
       xhr.onload = function () {
         if (xhr.status === 200 && qrBlobUrl === null) {
