@@ -36,6 +36,11 @@
   // We load a same-origin iframe at pku-ipc://localhost/bridge.html which
   // can make XHR to pku-ipc:// without mixed-content restrictions. The
   // parent page communicates with the iframe via postMessage.
+  // Detect WebView2 (Windows). On WebView2 we bypass the bridge and always
+  // use the hidden-iframe fallback, because same-origin XHR from the bridge
+  // iframe to the custom scheme may still be blocked by CORB.
+  var isWebView2 = !!(window.chrome && window.chrome.webview);
+
   var bridgeReady = false;
   var pendingQueue = [];
   var bridgeIframe = null;
@@ -62,36 +67,39 @@
     }, '*');
   }
 
+  // ─── Fallback IPC transport ───
+  // WebView2 on Windows blocks XHR from HTTPS pages to custom URI schemes
+  // (mixed-content / CORB).  Navigation requests to the same custom scheme
+  // are NOT blocked, so we use a short-lived hidden iframe as the transport.
+  // The Rust WebResourceRequested handler fires for the iframe src load just
+  // as it would for an XHR.  The bridge-iframe path (above) is still the
+  // primary mechanism on macOS / Linux; this path acts as the fallback.
   function tryDirectXhr(path, data) {
     var nocache = '&_=' + Date.now() + '.' + Math.random();
-    try {
-      var xhr = new XMLHttpRequest();
-      var url = 'pku-ipc://localhost/' + path + nocache;
-      xhr.open(data ? 'POST' : 'GET', url, true);
-      xhr.onerror = function() {
-        log('[nav-bar] XHR onerror:', path, 'status=', xhr.status, 'readyState=', xhr.readyState);
-      };
-      xhr.onload = function() {
-        log('[nav-bar] XHR onload:', path, 'status=', xhr.status, 'response=', xhr.responseText);
-      };
-      xhr.ontimeout = function() {
-        log('[nav-bar] XHR timeout:', path);
-      };
-      if (data) {
-        xhr.send(typeof data === 'string' ? data : JSON.stringify(data));
-      } else {
-        xhr.send();
-      }
-    } catch (e) {
-      log('[nav-bar] IPC send exception:', path, e);
-    }
+    var url = 'pku-ipc://localhost/' + path + nocache;
+    log('[nav-bar] iframe-fallback:', url);
+
+    var iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden;';
+    iframe.src = url;
+
+    var parent = document.body || document.documentElement;
+    if (parent) parent.appendChild(iframe);
+
+    // Remove after the request has been dispatched
+    setTimeout(function () {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    }, 1000);
   }
 
   // ─── IPC helper: send commands to Rust ───
   function ipcSend(path, data) {
     log('[nav-bar] ipcSend called:', path);
-    // Use iframe bridge when available (all platforms, especially macOS)
-    if (bridgeReady) {
+    // Use iframe bridge when available (macOS / Linux).
+    // On WebView2 (Windows) we skip the bridge and always use the iframe
+    // fallback because postMessage / same-origin XHR inside the bridge may
+    // still be silently blocked.
+    if (!isWebView2 && bridgeReady) {
       sendViaBridge(path, data);
       return;
     }
