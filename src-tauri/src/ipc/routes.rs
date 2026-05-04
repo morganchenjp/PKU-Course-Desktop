@@ -60,9 +60,9 @@ pub fn handle(
                 .get("msg")
                 .and_then(|v| v.as_str())
                 .unwrap_or(&body_str);
-            eprintln!("[download-diag] {msg}");
+            log::debug!("[download-diag] {msg}");
         } else {
-            eprintln!("[download-diag] {body_str}");
+            log::debug!("[download-diag] {body_str}");
         }
     } else if uri.contains("/show-main-view") {
         debug_log(&format!("IPC /show-main-view received, uri={}", uri));
@@ -72,7 +72,7 @@ pub fn handle(
             "downloads"
         };
         if let Err(e) = do_show_main_view(app, view) {
-            eprintln!("[pku-ipc] show_main_view error: {e}");
+            log::error!("[pku-ipc] show_main_view error: {e}");
         }
     } else if uri.contains("/video-info") {
         let body_str = String::from_utf8_lossy(request.body());
@@ -82,21 +82,21 @@ pub fn handle(
                 "data": value
             });
             let _ = app.emit("webview-message", payload);
-            eprintln!("[pku-ipc] video-info emitted");
+            log::info!("[pku-ipc] video-info emitted");
         }
     } else if uri.contains("/add-download") {
         let body_str = String::from_utf8_lossy(request.body());
         if let Ok(value) = serde_json::from_str::<Value>(&body_str) {
             let _ = app.emit("add-download-from-browser", value);
-            eprintln!("[pku-ipc] add-download emitted");
+            log::info!("[pku-ipc] add-download emitted");
         }
     } else if uri.contains("/open-external") {
         let body_str = String::from_utf8_lossy(request.body());
         if let Ok(value) = serde_json::from_str::<Value>(&body_str) {
             if let Some(url) = value.get("url").and_then(|v| v.as_str()) {
                 match open::that(url) {
-                    Ok(_) => eprintln!("[pku-ipc] open-external: {url}"),
-                    Err(e) => eprintln!("[pku-ipc] open-external error: {e}"),
+                    Ok(_) => log::info!("[pku-ipc] open-external: {url}"),
+                    Err(e) => log::error!("[pku-ipc] open-external error: {e}"),
                 }
             }
         }

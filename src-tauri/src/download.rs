@@ -93,7 +93,7 @@ impl DownloadManager {
                         "download-complete",
                         serde_json::json!({ "taskId": id }),
                     );
-                    eprintln!("[download] completed: {id}");
+                    log::info!("[download] completed: {id}");
                 }
                 Err(e) => {
                     let msg = e.to_string();
@@ -101,7 +101,7 @@ impl DownloadManager {
                         "download-error",
                         serde_json::json!({ "taskId": id, "error": msg }),
                     );
-                    eprintln!("[download] failed {id}: {msg}");
+                    log::error!("[download] failed {id}: {msg}");
                 }
             }
 
@@ -137,7 +137,7 @@ async fn download_file(
     let filepath = &task.filepath;
     let task_id = &task.id;
 
-    eprintln!("[download] starting {task_id}: {url}");
+    log::info!("[download] starting {task_id}: {url}");
 
     // Ensure directory exists
     if let Some(parent) = Path::new(filepath).parent() {
@@ -163,14 +163,14 @@ async fn download_file(
             .await
             .unwrap_or_else(|_| "<unable to read body>".to_string());
         let body_preview: String = body.chars().take(500).collect();
-        eprintln!(
+        log::error!(
             "[download] HTTP error {status} for {task_id}\n  url: {url}\n  final_url: {final_url}\n  body: {body_preview}"
         );
         anyhow::bail!("HTTP {status} — {body_preview}");
     }
     let total_size = response.content_length().unwrap_or(0);
 
-    eprintln!("[download] {task_id}: response {status}, size={total_size}, url={final_url}");
+    log::info!("[download] {task_id}: response {status}, size={total_size}, url={final_url}");
 
     // Create file
     let mut file = File::create(filepath)?;
@@ -234,7 +234,7 @@ async fn download_file(
     };
 
     // Extract audio if enabled
-    eprintln!(
+    log::info!(
         "[download] extract_audio={}, audio_format={}",
         extract_audio, audio_format
     );
@@ -245,14 +245,14 @@ async fn download_file(
             .with_extension(audio_format)
             .to_string_lossy()
             .into_owned();
-        eprintln!("[download] extracting audio to: {}", audio_path);
+        log::info!("[download] extracting audio to: {}", audio_path);
         match crate::ffmpeg::extract_audio(&final_video_path, &audio_path, audio_format).await {
             Ok(()) => {
                 emit_audio_extract_complete(app, task_id, &audio_path);
-                eprintln!("[download] audio extracted: {}", audio_path);
+                log::info!("[download] audio extracted: {}", audio_path);
             }
             Err(e) => {
-                eprintln!("[download] audio extraction failed for {task_id}: {e}");
+                log::error!("[download] audio extraction failed for {task_id}: {e}");
                 // Don't fail the download task — audio extraction is non-critical
             }
         }

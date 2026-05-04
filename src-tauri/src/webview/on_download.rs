@@ -23,13 +23,13 @@ pub fn handle_download_event(
     match event {
         DownloadEvent::Requested { url, destination } => {
             let url_str = url.to_string();
-            eprintln!("[on_download:{wv_label}] Requested: {}", url_str);
+            log::info!("[on_download:{wv_label}] Requested: {}", url_str);
             let state = webview.state::<AppState>();
             if let Ok(pending) = state.pending_downloads.lock() {
                 // Try exact URL match first
                 if let Some(info) = pending.get(&url_str) {
                     *destination = std::path::PathBuf::from(&info.filepath);
-                    eprintln!(
+                    log::info!(
                         "[on_download:{wv_label}] matched (exact): {} -> {}",
                         url_str, info.filepath
                     );
@@ -38,19 +38,19 @@ pub fn handle_download_event(
                 // Fallback: URL may differ due to redirect.
                 if let Some((_orig_url, info)) = pending.iter().next() {
                     *destination = std::path::PathBuf::from(&info.filepath);
-                    eprintln!(
+                    log::info!(
                         "[on_download:{wv_label}] matched (fallback): {} -> {} (orig: {})",
                         url_str, info.filepath, _orig_url
                     );
                     return true;
                 }
             }
-            eprintln!("[on_download:{wv_label}] untracked download: {}", url_str);
+            log::warn!("[on_download:{wv_label}] untracked download: {}", url_str);
             true
         }
         DownloadEvent::Finished { url, path, success } => {
             let url_str = url.to_string();
-            eprintln!(
+            log::info!(
                 "[on_download:{wv_label}] Finished: url={} path={:?} success={}",
                 url_str, path, success
             );
@@ -69,7 +69,7 @@ pub fn handle_download_event(
                         "download-complete",
                         json!({ "taskId": info.task_id }),
                     );
-                    eprintln!(
+                    log::info!(
                         "[on_download:{wv_label}] completed: task={} path={:?}",
                         info.task_id, path
                     );
@@ -81,10 +81,10 @@ pub fn handle_download_event(
                             "error": format!("Browser download failed ({})", wv_label)
                         }),
                     );
-                    eprintln!("[on_download:{wv_label}] failed: task={}", info.task_id);
+                    log::error!("[on_download:{wv_label}] failed: task={}", info.task_id);
                 }
             } else {
-                eprintln!("[on_download:{wv_label}] Finished but no pending entry found");
+                log::warn!("[on_download:{wv_label}] Finished but no pending entry found");
             }
             // Re-hide browser-webview if the user is no longer in browser mode
             rehide_browser_if_not_browser_mode(webview.app_handle());
@@ -97,7 +97,7 @@ pub fn handle_download_event(
                     std::thread::sleep(std::time::Duration::from_millis(100));
                     if let Some(wv) = app.get_webview(&label) {
                         let _ = wv.close();
-                        eprintln!("[on_download] temp webview '{label}' destroyed");
+                        log::info!("[on_download] temp webview '{label}' destroyed");
                     }
                 });
             }

@@ -66,14 +66,14 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         Ok(browser) => {
             // Start hidden; BrowserView.svelte will call show_browser_view
             let _ = browser.hide();
-            eprintln!(
+            log::info!(
                 "[Rust] browser-webview pre-created (hidden, {}x{} at 0,48)",
                 w,
                 h - 48.0
             );
         }
         Err(e) => {
-            eprintln!("[Rust] failed to pre-create browser-webview: {e}");
+            log::error!("[Rust] failed to pre-create browser-webview: {e}");
         }
     }
 
@@ -82,7 +82,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // in Svelte's onMount won't fire from a hidden state.
     if let Some(main_wv) = app.get_webview("main") {
         let _ = main_wv.hide();
-        eprintln!("[Rust] main webview explicitly hidden at startup");
+        log::info!("[Rust] main webview explicitly hidden at startup");
     }
 
     // ─── Window resize handler ───
@@ -111,8 +111,8 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         // used by `do_show_main_view`.
         std::thread::sleep(std::time::Duration::from_millis(200));
         match show_browser_view(&app_handle_init) {
-            Ok(()) => eprintln!("[Rust] startup show_browser_view: OK"),
-            Err(e) => eprintln!("[Rust] startup show_browser_view failed: {e}"),
+            Ok(()) => log::info!("[Rust] startup show_browser_view: OK"),
+            Err(e) => log::error!("[Rust] startup show_browser_view failed: {e}"),
         }
     });
 

@@ -37,7 +37,7 @@ pub async fn run(
         .await
         .map_err(|e| {
             let msg = format!("request failed: {e}");
-            eprintln!("[browser_download] {msg}");
+            log::error!("[browser_download] {msg}");
             let _ = app.emit(
                 "download-error",
                 json!({ "taskId": task_id, "error": msg }),
@@ -46,7 +46,7 @@ pub async fn run(
         })?;
 
     let status = resp.status();
-    eprintln!("[browser_download] response: status={status}");
+    log::info!("[browser_download] response: status={status}");
 
     if !status.is_success() {
         let msg = format!("HTTP {status}");
@@ -105,7 +105,7 @@ pub async fn run(
     }
 
     file.flush().map_err(|e| format!("flush: {e}"))?;
-    eprintln!("[browser_download] completed: {task_id} ({downloaded} bytes)");
+    log::info!("[browser_download] completed: {task_id} ({downloaded} bytes)");
 
     after_browser_download(app, &task_id, &filepath);
 

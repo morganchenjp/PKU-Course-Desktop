@@ -86,11 +86,11 @@ pub fn load_settings() -> anyhow::Result<AppSettings> {
                 Ok(legacy) => {
                     let migrated: AppSettings = legacy.into();
                     if let Err(e) = save_settings(&migrated) {
-                        eprintln!(
+                        log::error!(
                             "[settings] legacy migration parse ok, but re-save failed: {e}"
                         );
                     } else {
-                        eprintln!("[settings] migrated legacy snake_case settings to camelCase");
+                        log::info!("[settings] migrated legacy snake_case settings to camelCase");
                     }
                     Ok(migrated)
                 }

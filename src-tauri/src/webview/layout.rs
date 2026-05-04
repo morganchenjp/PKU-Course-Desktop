@@ -54,7 +54,7 @@ pub fn show_browser_view(app: &tauri::AppHandle) -> Result<(), String> {
 
     debug_log("show_browser_view: hide(main) + show(browser) complete");
 
-    eprintln!(
+    log::info!(
         "[Rust] show_browser_view: {}x{} at (0, {})",
         w,
         h - header_height,
@@ -117,14 +117,14 @@ pub fn do_show_main_view(app: &tauri::AppHandle, view: &str) -> Result<(), Strin
             .unwrap_or(false);
         if is_main {
             let _ = app_clone.emit("switch-to-main", json!({ "view": view_clone }));
-            eprintln!(
+            log::info!(
                 "[Rust] switch-to-main emitted (deferred): view={}",
                 view_clone
             );
         }
     });
 
-    eprintln!("[Rust] show_main_view: view={}", view);
+    log::info!("[Rust] show_main_view: view={}", view);
     Ok(())
 }
 

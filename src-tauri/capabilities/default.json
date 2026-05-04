@@ -26,6 +26,7 @@
     "process:default",
     "shell:default",
     "shell:allow-open",
-    "window-state:default"
+    "window-state:default",
+    "log:default"
   ]
 }

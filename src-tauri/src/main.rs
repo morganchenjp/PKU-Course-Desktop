@@ -21,9 +21,31 @@ use commands::{
     view::{show_browser_view, show_main_view},
 };
 use state::AppState;
+use tauri_plugin_log::{Target, TargetKind};
 
 fn main() {
     tauri::Builder::default()
+        // ─── Logging plugin ───
+        // Captures all `log::*` macros (including `debug_log`) to:
+        //   - Stdout (visible in `cargo tauri dev` and any console-subsystem build)
+        //   - The OS-specific log directory:
+        //       Linux:   ~/.config/ink.arthals.pku-course-desktop/logs/
+        //       macOS:   ~/Library/Logs/ink.arthals.pku-course-desktop/
+        //       Windows: %LOCALAPPDATA%/ink.arthals.pku-course-desktop/logs/
+        // This is the cross-platform replacement for the previous scattered
+        // `eprintln!` statements, which were silenced in Windows release builds
+        // (windows_subsystem = "windows" detaches stderr).
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    Target::new(TargetKind::Stdout),
+                    Target::new(TargetKind::LogDir { file_name: None }),
+                ])
+                .level(log::LevelFilter::Info)
+                .level_for("pku_course_desktop", log::LevelFilter::Debug)
+                .max_file_size(1_000_000) // 1 MB before rotation
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())

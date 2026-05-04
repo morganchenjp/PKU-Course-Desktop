@@ -37,7 +37,7 @@ pub fn after_browser_download(app: &tauri::AppHandle, task_id: &str, filepath: &
         let rt = match tokio::runtime::Runtime::new() {
             Ok(rt) => rt,
             Err(e) => {
-                eprintln!("[after_browser_download] failed to create tokio runtime: {e}");
+                log::error!("[after_browser_download] failed to create tokio runtime: {e}");
                 return;
             }
         };
@@ -47,7 +47,7 @@ pub fn after_browser_download(app: &tauri::AppHandle, task_id: &str, filepath: &
             &audio_format,
         )) {
             Ok(()) => emit_audio_extract_complete(&app_clone, &task_id_owned, &audio_path),
-            Err(e) => eprintln!(
+            Err(e) => log::error!(
                 "[after_browser_download] audio extraction failed for {task_id_owned}: {e}"
             ),
         }

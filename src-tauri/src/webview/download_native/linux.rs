@@ -42,13 +42,13 @@ pub fn run(
 
             match wk_webview.download_uri(&url_clone) {
                 Some(download) => {
-                    eprintln!("[webkit-dl] download_uri() returned Download object");
+                    log::info!("[webkit-dl] download_uri() returned Download object");
 
                     // ── decide-destination: set the correct file path ──
                     let fp = filepath_clone.clone();
                     download.connect_decide_destination(move |dl, suggested| {
                         let dest_uri = format!("file://{}", fp);
-                        eprintln!(
+                        log::info!(
                             "[webkit-dl] decide-destination: suggested={suggested}, dest={dest_uri}"
                         );
                         dl.set_allow_overwrite(true);
@@ -110,7 +110,7 @@ pub fn run(
                     let fp_f = filepath_clone.clone();
                     download.connect_finished(move |dl| {
                         let received = dl.received_data_length();
-                        eprintln!(
+                        log::info!(
                             "[webkit-dl] finished: task={tid_f} bytes={received} dest={fp_f}"
                         );
                         rehide_browser_if_not_browser_mode(&app_f);
@@ -122,7 +122,7 @@ pub fn run(
                     let tid_e = task_id_clone.clone();
                     download.connect_failed(move |_dl, error| {
                         let msg = error.to_string();
-                        eprintln!("[webkit-dl] failed: task={tid_e} error={msg}");
+                        log::error!("[webkit-dl] failed: task={tid_e} error={msg}");
                         let _ = app_e.emit(
                             "download-error",
                             json!({
@@ -134,7 +134,7 @@ pub fn run(
                     });
                 }
                 None => {
-                    eprintln!("[webkit-dl] download_uri() returned None!");
+                    log::error!("[webkit-dl] download_uri() returned None!");
                     let _ = app_clone.emit(
                         "download-error",
                         json!({

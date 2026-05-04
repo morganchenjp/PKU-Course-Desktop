@@ -174,7 +174,14 @@
     '  background: rgba(155,0,0,0.45) !important;',
     '}',
   ].join('\n');
-  (document.head || document.documentElement).appendChild(style);
+  var headOrRoot = document.head || document.documentElement;
+  if (headOrRoot) {
+    headOrRoot.appendChild(style);
+  } else {
+    document.addEventListener('DOMContentLoaded', function() {
+      (document.head || document.documentElement).appendChild(style);
+    });
+  }
 
   // ─── Create Toolbar DOM ───
   var navbar = document.createElement('div');

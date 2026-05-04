@@ -74,9 +74,9 @@ pub async fn browser_download(
         std::fs::create_dir_all(parent).map_err(|e| format!("mkdir: {e}"))?;
     }
 
-    eprintln!("[browser_download] starting download for {task_id}");
-    eprintln!("[browser_download] url: {url}");
-    eprintln!("[browser_download] filepath: {filepath}");
+    log::info!("[browser_download] starting download for {task_id}");
+    log::info!("[browser_download] url: {url}");
+    log::info!("[browser_download] filepath: {filepath}");
 
     download_native::run(&app, task_id, url, filepath).await
 }
