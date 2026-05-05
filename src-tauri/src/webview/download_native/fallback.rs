@@ -23,17 +23,15 @@ pub async fn run(
 
     // Register the pending download so on_download can route the
     // DownloadEvent::Requested callback back to this task.
-    {
-        let state = app.state::<AppState>();
-        if let Ok(mut pending) = state.pending_downloads.lock() {
-            pending.insert(
-                url.clone(),
-                PendingBrowserDownload {
-                    task_id,
-                    filepath,
-                },
-            );
-        }
+    let state = app.state::<AppState>();
+    if let Ok(mut pending) = state.pending_downloads.lock() {
+        pending.insert(
+            url.clone(),
+            PendingBrowserDownload {
+                task_id,
+                filepath,
+            },
+        );
     }
 
     // Ensure browser-webview is visible — WebView2/WKWebView may skip
