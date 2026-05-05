@@ -64,8 +64,8 @@ pub async fn run(
     );
 
     browser
-        .evaluate_script(&script)
-        .map_err(|e| format!("evaluate_script failed: {e}"))?;
+        .eval(&script)
+        .map_err(|e| format!("eval failed: {e}"))?;
 
     // Return immediately — the actual download progresses via Tauri's
     // on_download handler (DownloadEvent::Requested / Progress / Finished).
