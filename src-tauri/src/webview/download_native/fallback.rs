@@ -1,18 +1,15 @@
 //! macOS / Windows fallback for browser-driven downloads.
 //!
-//! WebKitGTK is Linux-only.  On the other two platforms we fall back to
-//! `reqwest` streaming with the JWT already embedded in the URL.  Session
-//! cookies (JSESSIONID, BbRouter) are inaccessible from this path — they
-//! live in the WKWebView / WebView2 cookie jar — but the JWT in the URL
-//! is sufficient for `course.pku.edu.cn`'s download endpoint.
+//! Uses the browser-webview itself to trigger the download: we evaluate a
+//! small script that creates a hidden iframe and navigates it to the download
+//! URL. This carries the full browser session (including httpOnly cookies
+//! like JSESSIONID) because the request originates from the webview.
+//! Tauri's `on_download` handler intercepts the download and routes it to
+//! the desired file path.
 
-use futures::StreamExt;
-use serde_json::json;
-use std::io::Write;
-use tauri::Emitter;
+use tauri::{LogicalPosition, Manager};
 
-use crate::util::fmt::{fmt_size, fmt_speed};
-use crate::webview::download_native::shared::after_browser_download;
+use crate::state::{AppState, PendingBrowserDownload};
 
 pub async fn run(
     app: &tauri::AppHandle,
@@ -20,94 +17,57 @@ pub async fn run(
     url: String,
     filepath: String,
 ) -> Result<(), String> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(600))
-        .build()
-        .map_err(|e| format!("client: {e}"))?;
+    let browser = app
+        .get_webview("browser-webview")
+        .ok_or("Browser webview not found")?;
 
-    let resp = client
-        .get(&url)
-        .header(
-            "User-Agent",
-            "Mozilla/5.0 (compatible; PKUCourseDesktop/0.1)",
-        )
-        .header("Referer", "https://course.pku.edu.cn/")
-        .header("Accept", "*/*")
-        .send()
-        .await
-        .map_err(|e| {
-            let msg = format!("request failed: {e}");
-            log::error!("[browser_download] {msg}");
-            let _ = app.emit(
-                "download-error",
-                json!({ "taskId": task_id, "error": msg }),
+    // Register the pending download so on_download can route the
+    // DownloadEvent::Requested callback back to this task.
+    {
+        let state = app.state::<AppState>();
+        if let Ok(mut pending) = state.pending_downloads.lock() {
+            pending.insert(
+                url.clone(),
+                PendingBrowserDownload {
+                    task_id,
+                    filepath,
+                },
             );
-            msg
-        })?;
-
-    let status = resp.status();
-    log::info!("[browser_download] response: status={status}");
-
-    if !status.is_success() {
-        let msg = format!("HTTP {status}");
-        let _ = app.emit(
-            "download-error",
-            json!({ "taskId": task_id, "error": msg }),
-        );
-        return Err(msg);
-    }
-
-    let total_size = resp.content_length().unwrap_or(0);
-    let mut file = std::fs::File::create(&filepath).map_err(|e| format!("create file: {e}"))?;
-    let mut stream = resp.bytes_stream();
-    let mut downloaded: u64 = 0;
-    let start = std::time::Instant::now();
-    let mut last_emit = std::time::Instant::now();
-
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("stream: {e}"))?;
-        file.write_all(&chunk).map_err(|e| format!("write: {e}"))?;
-        downloaded += chunk.len() as u64;
-
-        if last_emit.elapsed().as_millis() > 500 {
-            let progress = if total_size > 0 {
-                (downloaded as f64 / total_size as f64) * 100.0
-            } else {
-                -1.0
-            };
-            let elapsed = start.elapsed().as_secs_f64();
-            let speed = if elapsed > 0.0 {
-                downloaded as f64 / elapsed
-            } else {
-                0.0
-            };
-            let eta_str = if total_size > 0 && speed > 0.0 {
-                let remaining = (total_size - downloaded) as f64 / speed;
-                if remaining >= 60.0 {
-                    format!("{:.0}m {:.0}s", remaining / 60.0, remaining % 60.0)
-                } else {
-                    format!("{:.0}s", remaining)
-                }
-            } else {
-                fmt_size(downloaded)
-            };
-            let _ = app.emit(
-                "download-progress",
-                json!({
-                    "taskId": task_id,
-                    "progress": progress,
-                    "speed": fmt_speed(speed),
-                    "eta": eta_str,
-                }),
-            );
-            last_emit = std::time::Instant::now();
         }
     }
 
-    file.flush().map_err(|e| format!("flush: {e}"))?;
-    log::info!("[browser_download] completed: {task_id} ({downloaded} bytes)");
+    // Ensure browser-webview is visible — WebView2/WKWebView may skip
+    // network requests for completely hidden webviews. Position off-screen
+    // so the user won't see it flash. `rehide_browser_if_not_browser_mode`
+    // puts it back when the download finishes.
+    let _ = browser.set_position(LogicalPosition::new(10000.0, 48.0));
+    let _ = browser.show();
 
-    after_browser_download(app, &task_id, &filepath);
+    // Trigger the download by navigating a hidden iframe to the URL.
+    // The iframe loads on the same origin as the wrapper page
+    // (course.pku.edu.cn), so all session cookies are sent.
+    let script = format!(
+        r#"(function() {{
+            var iframe = document.createElement('iframe');
+            iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden;';
+            iframe.src = '{}';
+            if (document.body) {{
+                document.body.appendChild(iframe);
+            }} else {{
+                document.documentElement.appendChild(iframe);
+            }}
+            setTimeout(function() {{
+                if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+            }}, 120000);
+        }})();"#,
+        url.replace('\\', "\\\\").replace('\'', "\\'")
+    );
 
+    browser
+        .evaluate_script(&script)
+        .map_err(|e| format!("evaluate_script failed: {e}"))?;
+
+    // Return immediately — the actual download progresses via Tauri's
+    // on_download handler (DownloadEvent::Requested / Progress / Finished).
     Ok(())
 }

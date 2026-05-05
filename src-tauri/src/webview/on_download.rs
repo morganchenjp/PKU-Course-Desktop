@@ -10,7 +10,9 @@ use serde_json::json;
 use tauri::{Emitter, Manager};
 
 use crate::state::AppState;
-use crate::webview::download_native::shared::rehide_browser_if_not_browser_mode;
+use crate::webview::download_native::shared::{
+    after_browser_download, rehide_browser_if_not_browser_mode,
+};
 
 /// Shared on_download handler logic for any webview.
 /// Returns true to allow the download, false to reject.
@@ -65,10 +67,14 @@ pub fn handle_download_event(
             if let Some(info) = pending_info {
                 let app = webview.app_handle();
                 if success {
-                    let _ = app.emit(
-                        "download-complete",
-                        json!({ "taskId": info.task_id }),
-                    );
+                    if let Some(ref p) = path {
+                        after_browser_download(&app, &info.task_id, &p.to_string_lossy());
+                    } else {
+                        let _ = app.emit(
+                            "download-complete",
+                            json!({ "taskId": info.task_id }),
+                        );
+                    }
                     log::info!(
                         "[on_download:{wv_label}] completed: task={} path={:?}",
                         info.task_id, path
