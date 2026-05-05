@@ -1,3 +1,7 @@
+# Specs
+.specs/
+logs/
+
 # Dependencies
 node_modules/
 .pnp
