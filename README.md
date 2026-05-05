@@ -19,14 +19,8 @@
 - **Build Tool**: Vite
 - **Package Manager**: Bun
 
-## 开发环境要求
-
-- [Rust](https://rustup.rs/) (1.77.0+)
-- [Node.js](https://nodejs.org/) (18+)
-- [Bun](https://bun.sh/) (1.0+)
-- [FFmpeg](https://ffmpeg.org/) (用于视频转码)
-
-### 安装 FFmpeg
+## 简要使用说明
+### 必须先安装 FFmpeg
 
 **macOS:**
 ```bash
@@ -46,7 +40,24 @@ sudo apt install gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.
 或者更直接的下载链接： https://www.gyan.dev/ffmpeg/builds/ ， 下载 ffmpeg-git-essentials.7z 文件即可， 
 然后把这个文件解压到 c:\ffmpeg 目录， 同时把 c:\ffmpeg\bin  目录添加到 PATH 中。 
 
-## 快速开始
+### App 的安装使用
+下载安装对应OS的发布包， 正常安装后启动， 
+App启动后会自动打开PKU教学网， 正常用“校园卡用户“身份登陆， 然后找到你的课程， 然后找到“课堂实录”， 再点击对应日期的课堂实录， （建议把App全屏使用）
+会在App内置的浏览器中自动打开一个视频播放View, 在Video的下方可以看到3个Button，如下图：
+<img width="668" height="161" alt="video-downloader" src="https://github.com/user-attachments/assets/e506b0e0-a8f8-4ec0-aeff-dcb9c34fd3a8" />
+直接点击“下载视频” 即可， 然后点击右上角的“下载管理”， 可以查看当前的下载任务，文件缺省下载到系统的“Download” 目录下。
+<img width="169" height="58" alt="nav-buttons" src="https://github.com/user-attachments/assets/f952ca12-df03-4976-a534-076e637d8e39" />
+如果希望下载视频MP4 之后， 自动把MP4中的音频提取为MP3文件， 方便后续把MP3文件上传到阿里的”通义听悟“ 之类的AI工具中， 把语音直接转化为课堂笔记，请点击右上角的”设置“ Button,
+<img width="230" height="275" alt="extract-audio" src="https://github.com/user-attachments/assets/c4ba41f9-8c60-4b0a-b61a-5f79a376130c" />
+如上图，打开“同时提取音频文件”开关， 然后点击底部的“保存设置” 即可。
+
+
+## 开发环境要求
+
+- [Rust](https://rustup.rs/) (1.77.0+)
+- [Node.js](https://nodejs.org/) (18+)
+- [Bun](https://bun.sh/) (1.0+)
+- [FFmpeg](https://ffmpeg.org/) (用于视频转码)
 
 ### 1. 克隆项目
 
