@@ -1,16 +1,16 @@
 //! macOS / Windows fallback for browser-driven downloads.
 //!
-//! Uses the browser-webview itself to trigger the download: we evaluate a
-//! small script that creates a hidden iframe and navigates it to the download
-//! URL. This carries the full browser session (including httpOnly cookies
-//! like JSESSIONID) because the request originates from the webview.
-//! Tauri's `on_download` handler intercepts the download and routes it to
-//! the desired file path.
+//! Instead of using the webview's native download mechanism (which provides no
+//! progress events in this Tauri version), we extract the browser's cookies
+//! (including httpOnly / secure cookies) via Tauri's `cookies_for_url` API and
+//! stream the file with `reqwest`.  This gives us real byte-level progress,
+//! speed and ETA — identical UX to the Linux WebKitGTK path.
 
-use serde_json::json;
-use tauri::{Emitter, LogicalPosition, Manager};
+use tauri::{Emitter, Manager};
+use tokio::time::Duration;
 
-use crate::state::{AppState, PendingBrowserDownload, ViewMode};
+use crate::state::{AppState, ViewMode};
+use crate::webview::download_native::shared::after_browser_download;
 
 pub async fn run(
     app: &tauri::AppHandle,
@@ -22,67 +22,83 @@ pub async fn run(
         .get_webview("browser-webview")
         .ok_or("Browser webview not found")?;
 
-    // Register the pending download so on_download can route the
-    // DownloadEvent::Requested callback back to this task.
-    let state = app.state::<AppState>();
-    let is_browser_mode = state
+    // ── 1. Extract cookies from the browser webview ──────────────────────
+    // `cookies_for_url` returns *all* cookies including httpOnly / secure
+    // cookies that JavaScript cannot read.  On Windows this must be called
+    // from an async context (Tokio worker thread) to avoid deadlocking the
+    // WebView2 UI thread.
+    let parsed_url = url
+        .parse::<url::Url>()
+        .map_err(|e| format!("invalid download url: {e}"))?;
+    let cookies = browser
+        .cookies_for_url(parsed_url)
+        .map_err(|e| format!("failed to read webview cookies: {e}"))?;
+    let cookie_header = if cookies.is_empty() {
+        None
+    } else {
+        Some(
+            cookies
+                .iter()
+                .map(|c| format!("{}={}", c.name(), c.value()))
+                .collect::<Vec<_>>()
+                .join("; "),
+        )
+    };
+
+    log::info!(
+        "[fallback] cookie extraction: {} cookies for {url}",
+        cookies.len()
+    );
+
+    // ── 2. Create a one-off HTTP client and stream the file ──────────────
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(300))
+        .build()
+        .map_err(|e| format!("failed to build http client: {e}"))?;
+
+    let result = crate::download::download_with_progress(
+        &client,
+        &url,
+        &filepath,
+        &task_id,
+        None, // JWT is already in the URL query string for browser downloads
+        cookie_header.as_deref(),
+        app,
+    )
+    .await;
+
+    // ── 3. Completion / error handling ───────────────────────────────────
+    match result {
+        Ok(()) => {
+            let _ = app.emit(
+                "download-complete",
+                serde_json::json!({ "taskId": task_id }),
+            );
+            log::info!("[fallback] download completed: {task_id}");
+            after_browser_download(app, &task_id, &filepath);
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            let _ = app.emit(
+                "download-error",
+                serde_json::json!({ "taskId": task_id, "error": msg }),
+            );
+            log::error!("[fallback] download failed {task_id}: {msg}");
+        }
+    }
+
+    // Re-hide browser-webview if the user is no longer in browser mode
+    let is_browser = app
+        .state::<AppState>()
         .current_view_mode
         .lock()
         .map(|m| matches!(*m, ViewMode::Browser))
         .unwrap_or(false);
-
-    let task_id_for_emit = task_id.clone();
-    if let Ok(mut pending) = state.pending_downloads.lock() {
-        pending.insert(url.clone(), PendingBrowserDownload { task_id, filepath });
+    if !is_browser {
+        if let Some(b) = app.get_webview("browser-webview") {
+            let _ = b.hide();
+        }
     }
 
-    // Ensure browser-webview is visible — WebView2/WKWebView may skip
-    // network requests for completely hidden webviews. Position off-screen
-    // so the user won't see it flash. `rehide_browser_if_not_browser_mode`
-    // puts it back when the download finishes.
-    if !is_browser_mode {
-        let _ = browser.set_position(LogicalPosition::new(10000.0, 48.0));
-        let _ = browser.show();
-    }
-
-    // Trigger the download by navigating a hidden iframe to the URL.
-    // The iframe loads on the same origin as the wrapper page
-    // (course.pku.edu.cn), so all session cookies are sent.
-    let script = format!(
-        r#"(function() {{
-            var iframe = document.createElement('iframe');
-            iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden;';
-            iframe.src = '{}';
-            if (document.body) {{
-                document.body.appendChild(iframe);
-            }} else {{
-                document.documentElement.appendChild(iframe);
-            }}
-            setTimeout(function() {{
-                if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-            }}, 120000);
-        }})();"#,
-        url.replace('\\', "\\\\").replace('\'', "\\'")
-    );
-
-    browser
-        .eval(&script)
-        .map_err(|e| format!("eval failed: {e}"))?;
-
-    // The fallback path has no intermediate progress callbacks (Tauri's
-    // DownloadEvent::Progress is unavailable in this version), so emit an
-    // indeterminate state so the UI shows a spinner instead of 0%.
-    let _ = app.emit(
-        "download-progress",
-        json!({
-            "taskId": task_id_for_emit,
-            "progress": -1.0,
-            "speed": "浏览器下载中…",
-            "eta": "-",
-        }),
-    );
-
-    // Return immediately — the actual download progresses via Tauri's
-    // on_download handler (DownloadEvent::Requested / Progress / Finished).
     Ok(())
 }

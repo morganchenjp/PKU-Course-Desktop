@@ -123,17 +123,17 @@ impl DownloadManager {
     }
 }
 
-async fn download_file(
-    client: Client,
-    task: DownloadTask,
+/// Stream-download a file over HTTP and emit progress events.
+/// Does **not** perform any post-processing (m3u8 conversion / audio extraction).
+pub async fn download_with_progress(
+    client: &Client,
+    url: &str,
+    filepath: &str,
+    task_id: &str,
+    jwt: Option<&str>,
+    cookie_header: Option<&str>,
     app: &tauri::AppHandle,
-    extract_audio: bool,
-    audio_format: &str,
 ) -> anyhow::Result<()> {
-    let url = &task.video_info.download_url;
-    let filepath = &task.filepath;
-    let task_id = &task.id;
-
     log::info!("[download] starting {task_id}: {url}");
 
     // Ensure directory exists
@@ -145,8 +145,13 @@ async fn download_file(
     let mut request = client.get(url);
 
     // Add JWT if available
-    if let Some(jwt) = &task.video_info.jwt {
+    if let Some(jwt) = jwt {
         request = request.header("Authorization", format!("Bearer {}", jwt));
+    }
+
+    // Add cookies if available
+    if let Some(cookie) = cookie_header {
+        request = request.header("Cookie", cookie);
     }
 
     // Send request
@@ -218,6 +223,30 @@ async fn download_file(
     }
 
     file.flush()?;
+    Ok(())
+}
+
+async fn download_file(
+    client: Client,
+    task: DownloadTask,
+    app: &tauri::AppHandle,
+    extract_audio: bool,
+    audio_format: &str,
+) -> anyhow::Result<()> {
+    let url = &task.video_info.download_url;
+    let filepath = &task.filepath;
+    let task_id = &task.id;
+
+    download_with_progress(
+        &client,
+        url,
+        filepath,
+        task_id,
+        task.video_info.jwt.as_deref(),
+        None,
+        app,
+    )
+    .await?;
 
     // Handle m3u8 conversion if needed
     let final_video_path = if task.video_info.is_m3u8 {
