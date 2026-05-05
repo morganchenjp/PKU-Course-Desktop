@@ -57,8 +57,8 @@ impl From<LegacyAppSettings> for AppSettings {
 }
 
 fn get_settings_path() -> anyhow::Result<PathBuf> {
-    let config_dir = dirs::config_dir()
-        .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
+    let config_dir =
+        dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
 
     let app_config = config_dir.join("pku-course-desktop");
     std::fs::create_dir_all(&app_config)?;

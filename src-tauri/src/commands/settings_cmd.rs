@@ -21,7 +21,8 @@ pub fn load_settings() -> Result<AppSettings, String> {
 pub fn save_settings(settings: AppSettings, state: State<'_, AppState>) -> Result<(), String> {
     log::info!(
         "[save_settings] received: extract_audio={}, audio_format={}",
-        settings.extract_audio, settings.audio_format
+        settings.extract_audio,
+        settings.audio_format
     );
     crate::settings::save_settings(&settings).map_err(|e| e.to_string())?;
     // Also update in-memory state so the change takes effect immediately
@@ -29,7 +30,8 @@ pub fn save_settings(settings: AppSettings, state: State<'_, AppState>) -> Resul
     *current = settings.clone();
     log::info!(
         "[save_settings] in-memory updated: extract_audio={}, audio_format={}",
-        current.extract_audio, current.audio_format
+        current.extract_audio,
+        current.audio_format
     );
     Ok(())
 }

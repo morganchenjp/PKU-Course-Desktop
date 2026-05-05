@@ -70,7 +70,10 @@ pub fn do_show_main_view(app: &tauri::AppHandle, view: &str) -> Result<(), Strin
 
     // Set mode BEFORE operations so that if anything fails, state is correct for retry
     let app_state = app.state::<AppState>();
-    let mut mode = app_state.current_view_mode.lock().map_err(|e| e.to_string())?;
+    let mut mode = app_state
+        .current_view_mode
+        .lock()
+        .map_err(|e| e.to_string())?;
     *mode = ViewMode::Main;
     drop(mode);
 

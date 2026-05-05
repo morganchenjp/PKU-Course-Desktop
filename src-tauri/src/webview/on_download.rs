@@ -33,7 +33,8 @@ pub fn handle_download_event(
                     *destination = std::path::PathBuf::from(&info.filepath);
                     log::info!(
                         "[on_download:{wv_label}] matched (exact): {} -> {}",
-                        url_str, info.filepath
+                        url_str,
+                        info.filepath
                     );
                     return true;
                 }
@@ -42,7 +43,9 @@ pub fn handle_download_event(
                     *destination = std::path::PathBuf::from(&info.filepath);
                     log::info!(
                         "[on_download:{wv_label}] matched (fallback): {} -> {} (orig: {})",
-                        url_str, info.filepath, _orig_url
+                        url_str,
+                        info.filepath,
+                        _orig_url
                     );
                     return true;
                 }
@@ -54,7 +57,9 @@ pub fn handle_download_event(
             let url_str = url.to_string();
             log::info!(
                 "[on_download:{wv_label}] Finished: url={} path={:?} success={}",
-                url_str, path, success
+                url_str,
+                path,
+                success
             );
             let state = webview.state::<AppState>();
             let pending_info = state.pending_downloads.lock().ok().and_then(|mut p| {
@@ -68,16 +73,14 @@ pub fn handle_download_event(
                 let app = webview.app_handle();
                 if success {
                     if let Some(ref p) = path {
-                        after_browser_download(&app, &info.task_id, &p.to_string_lossy());
+                        after_browser_download(app, &info.task_id, p.to_str().unwrap_or(""));
                     } else {
-                        let _ = app.emit(
-                            "download-complete",
-                            json!({ "taskId": info.task_id }),
-                        );
+                        let _ = app.emit("download-complete", json!({ "taskId": info.task_id }));
                     }
                     log::info!(
                         "[on_download:{wv_label}] completed: task={} path={:?}",
-                        info.task_id, path
+                        info.task_id,
+                        path
                     );
                 } else {
                     let _ = app.emit(

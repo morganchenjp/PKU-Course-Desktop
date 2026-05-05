@@ -12,12 +12,7 @@ use crate::webview::download_native::shared::{
     after_browser_download, rehide_browser_if_not_browser_mode,
 };
 
-pub fn run(
-    app: &tauri::AppHandle,
-    task_id: &str,
-    url: &str,
-    filepath: &str,
-) -> Result<(), String> {
+pub fn run(app: &tauri::AppHandle, task_id: &str, url: &str, filepath: &str) -> Result<(), String> {
     let browser = app
         .get_webview("browser-webview")
         .ok_or("Browser webview not found")?;

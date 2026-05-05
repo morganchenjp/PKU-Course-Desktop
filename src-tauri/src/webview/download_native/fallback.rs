@@ -9,7 +9,7 @@
 
 use tauri::{LogicalPosition, Manager};
 
-use crate::state::{AppState, PendingBrowserDownload};
+use crate::state::{AppState, PendingBrowserDownload, ViewMode};
 
 pub async fn run(
     app: &tauri::AppHandle,
@@ -24,22 +24,24 @@ pub async fn run(
     // Register the pending download so on_download can route the
     // DownloadEvent::Requested callback back to this task.
     let state = app.state::<AppState>();
+    let is_browser_mode = state
+        .current_view_mode
+        .lock()
+        .map(|m| matches!(*m, ViewMode::Browser))
+        .unwrap_or(false);
+
     if let Ok(mut pending) = state.pending_downloads.lock() {
-        pending.insert(
-            url.clone(),
-            PendingBrowserDownload {
-                task_id,
-                filepath,
-            },
-        );
+        pending.insert(url.clone(), PendingBrowserDownload { task_id, filepath });
     }
 
     // Ensure browser-webview is visible — WebView2/WKWebView may skip
     // network requests for completely hidden webviews. Position off-screen
     // so the user won't see it flash. `rehide_browser_if_not_browser_mode`
     // puts it back when the download finishes.
-    let _ = browser.set_position(LogicalPosition::new(10000.0, 48.0));
-    let _ = browser.show();
+    if !is_browser_mode {
+        let _ = browser.set_position(LogicalPosition::new(10000.0, 48.0));
+        let _ = browser.show();
+    }
 
     // Trigger the download by navigating a hidden iframe to the URL.
     // The iframe loads on the same origin as the wrapper page

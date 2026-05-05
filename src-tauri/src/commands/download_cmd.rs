@@ -30,10 +30,7 @@ pub async fn start_download(
 }
 
 #[tauri::command]
-pub async fn pause_download(
-    task_id: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn pause_download(task_id: String, state: State<'_, AppState>) -> Result<(), String> {
     let manager = state.download_manager.lock().await;
     manager
         .pause_download(&task_id)

@@ -89,10 +89,7 @@ impl DownloadManager {
             let id = task.id.clone();
             match download_file(client, task, &app, extract_audio, &audio_format).await {
                 Ok(()) => {
-                    let _ = app.emit(
-                        "download-complete",
-                        serde_json::json!({ "taskId": id }),
-                    );
+                    let _ = app.emit("download-complete", serde_json::json!({ "taskId": id }));
                     log::info!("[download] completed: {id}");
                 }
                 Err(e) => {
@@ -236,7 +233,8 @@ async fn download_file(
     // Extract audio if enabled
     log::info!(
         "[download] extract_audio={}, audio_format={}",
-        extract_audio, audio_format
+        extract_audio,
+        audio_format
     );
     if extract_audio {
         // Use Path::with_extension so a dot somewhere in the parent directory
