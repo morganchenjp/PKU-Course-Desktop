@@ -266,7 +266,7 @@
       if (qrLoaded) return;
       qrLoaded = true;
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', 'ipcBaseUrl + 'donation-qr'', true);
+      xhr.open('GET', ipcBaseUrl + 'donation-qr', true);
       xhr.responseType = 'blob';
       xhr.onload = function () {
         if (xhr.status === 200 && qrBlobUrl === null) {
@@ -387,7 +387,7 @@
       if (qrLoaded) return;
       qrLoaded = true;
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', 'ipcBaseUrl + 'donation-qr'', true);
+      xhr.open('GET', ipcBaseUrl + 'donation-qr', true);
       xhr.responseType = 'blob';
       xhr.onload = function () {
         if (xhr.status === 200 && qrBlobUrl === null) {
