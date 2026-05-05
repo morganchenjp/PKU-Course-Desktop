@@ -10,7 +10,7 @@
 - 🎨 支持日间/夜间主题切换
 - 📝 智能文件命名规则
 - 🔄 m3u8 转码为 MP4（内置 FFmpeg 支持）
-- 🎵 从视频提取音频为 MP3/AAC/WAV
+- 🎵 通过 FFmpeg 从MP4视频提取音频为 MP3/AAC/WAV
 
 ## 技术栈
 
@@ -42,7 +42,9 @@ sudo apt install gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.
 ```
 
 **Windows:**
-下载 FFmpeg 并添加到系统 PATH: https://ffmpeg.org/download.html
+下载 FFmpeg 并添加到系统 PATH: https://ffmpeg.org/download.html 
+或者更直接的下载链接： https://www.gyan.dev/ffmpeg/builds/ ， 下载 ffmpeg-git-essentials.7z 文件即可， 
+然后把这个文件解压到 c:\ffmpeg 目录， 同时把 c:\ffmpeg\bin  目录添加到 PATH 中。 
 
 ## 快速开始
 
