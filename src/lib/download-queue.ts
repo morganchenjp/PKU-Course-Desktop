@@ -4,6 +4,21 @@ import { downloadTasks, settings } from "./store";
 import { createDownloadTask } from "./download-utils";
 import type { VideoInfo } from "./types";
 
+// Deduplication window: ignore duplicate download requests for the same URL
+// within this many milliseconds.  This prevents the triple-fire on WebView2
+// caused by the iframe direct XHR plus two top-frame postMessage relays.
+const DEDUP_MS = 3000;
+const recentDownloads = new Map<string, number>();
+
+function isDuplicate(url: string): boolean {
+  const last = recentDownloads.get(url);
+  if (last && Date.now() - last < DEDUP_MS) {
+    return true;
+  }
+  recentDownloads.set(url, Date.now());
+  return false;
+}
+
 /**
  * Hand a freshly detected video off to the Rust download pipeline,
  * respecting the user's max-concurrent-downloads setting.
@@ -14,6 +29,11 @@ import type { VideoInfo } from "./types";
  * `startNextPendingDownload()`.
  */
 export async function enqueueDownload(videoInfo: VideoInfo): Promise<void> {
+  if (isDuplicate(videoInfo.downloadUrl)) {
+    console.log("[download-queue] dedup: skipping duplicate for", videoInfo.downloadUrl);
+    return;
+  }
+
   const task = await createDownloadTask(videoInfo);
   const currentTasks = get(downloadTasks);
   const currentSettings = get(settings);

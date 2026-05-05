@@ -7,7 +7,8 @@
 //! Tauri's `on_download` handler intercepts the download and routes it to
 //! the desired file path.
 
-use tauri::{LogicalPosition, Manager};
+use serde_json::json;
+use tauri::{Emitter, LogicalPosition, Manager};
 
 use crate::state::{AppState, PendingBrowserDownload, ViewMode};
 
@@ -30,6 +31,7 @@ pub async fn run(
         .map(|m| matches!(*m, ViewMode::Browser))
         .unwrap_or(false);
 
+    let task_id_for_emit = task_id.clone();
     if let Ok(mut pending) = state.pending_downloads.lock() {
         pending.insert(url.clone(), PendingBrowserDownload { task_id, filepath });
     }
@@ -66,6 +68,19 @@ pub async fn run(
     browser
         .eval(&script)
         .map_err(|e| format!("eval failed: {e}"))?;
+
+    // The fallback path has no intermediate progress callbacks (Tauri's
+    // DownloadEvent::Progress is unavailable in this version), so emit an
+    // indeterminate state so the UI shows a spinner instead of 0%.
+    let _ = app.emit(
+        "download-progress",
+        json!({
+            "taskId": task_id_for_emit,
+            "progress": -1.0,
+            "speed": "浏览器下载中…",
+            "eta": "-",
+        }),
+    );
 
     // Return immediately — the actual download progresses via Tauri's
     // on_download handler (DownloadEvent::Requested / Progress / Finished).

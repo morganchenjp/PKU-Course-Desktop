@@ -1,5 +1,20 @@
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::process::Stdio;
 use tokio::process::Command;
+
+/// Windows creation flag: don't create a visible console window.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+/// Helper to apply platform-specific process creation flags.
+#[cfg(windows)]
+fn hide_console(cmd: &mut Command) {
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_console(_cmd: &mut Command) {}
 
 /// Convert m3u8 stream to mp4 using ffmpeg
 pub async fn convert_m3u8_to_mp4(
@@ -15,6 +30,7 @@ pub async fn convert_m3u8_to_mp4(
     }
 
     let mut cmd = Command::new("ffmpeg");
+    hide_console(&mut cmd);
 
     // Add input
     cmd.arg("-i").arg(m3u8_url);
@@ -81,6 +97,7 @@ pub async fn extract_audio(
     };
 
     let mut cmd = Command::new("ffmpeg");
+    hide_console(&mut cmd);
 
     cmd.arg("-i")
         .arg(video_path)
@@ -121,8 +138,9 @@ pub async fn extract_audio(
 
 /// Check if ffmpeg is available in system PATH
 async fn is_ffmpeg_available() -> bool {
-    Command::new("ffmpeg")
-        .arg("-version")
+    let mut cmd = Command::new("ffmpeg");
+    hide_console(&mut cmd);
+    cmd.arg("-version")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
