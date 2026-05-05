@@ -69,6 +69,16 @@
     // This allows video-detector.js to run on the player page and inject
     // download buttons.
     if (!_isPlayerPage) {
+      // WebView2: initialization scripts are injected into cross-origin
+      // iframes, so video-detector.js / hls-player.js run there natively.
+      // Navigating the top frame to the player URL breaks the BlackBoard
+      // auth context (wrapper-to-iframe postMessage, referrer chain, etc.)
+      // and causes "签名失败". Keep the player in the iframe.
+      if (isWebView2) {
+        console.log('[hls-player] WebView2: skipping iframe auto-navigation; player stays in iframe');
+        return;
+      }
+
       var _navigating = false;
 
       function navigateToPlayer(src) {
