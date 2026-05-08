@@ -93,6 +93,6 @@ jobs:
             - **macOS**: `.dmg` (Apple Silicon & Intel)
             - **Linux**: `.AppImage` / `.deb`
             - **Windows**: `.msi` / `.exe`
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
