@@ -81,11 +81,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'PKU Course Desktop ${{ github.ref_name }}'
+          tagName: ${{ github.event.inputs.version || github.ref_name }}
+          releaseName: 'PKU Course Desktop ${{ github.event.inputs.version || github.ref_name }}'
           releaseAssetNamePattern: '${{ env.VERSION }}_${{ matrix.os_label }}_${{ matrix.artifact_suffix }}{{ ext }}'
           releaseBody: |
-            ## PKU Course Desktop ${{ github.ref_name }}
+            ## PKU Course Desktop ${{ github.event.inputs.version || github.ref_name }}
 
             PKU Course Desktop - PKU course video downloader.
 
