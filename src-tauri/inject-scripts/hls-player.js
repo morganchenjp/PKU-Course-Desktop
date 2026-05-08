@@ -18,7 +18,8 @@
   // IPC helper (same pattern as nav-bar.js / video-detector.js)
   // ═══════════════════════════════════════════════════════════════════
   var isWebView2 = !!(window.chrome && window.chrome.webview);
-  var ipcBaseUrl = isWebView2 ? 'https://pku-ipc.localhost/' : 'pku-ipc://localhost/';
+  var isMac = /Macintosh/.test(navigator.userAgent);
+  var ipcBaseUrl = (isWebView2 || isMac) ? 'https://pku-ipc.localhost/' : 'pku-ipc://localhost/';
 
   function ipcSend(path, data) {
     try {

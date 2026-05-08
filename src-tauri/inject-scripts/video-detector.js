@@ -18,9 +18,12 @@
 (function () {
   'use strict';
 
-  // WebView2 (Windows) uses the https://<scheme>.localhost/ workaround.
+  // WebView2 (Windows) and macOS WKWebView block mixed-content requests
+  // from HTTPS pages to the raw pku-ipc:// scheme. Use the https://
+  // workaround URL that Tauri maps when use_https_scheme(true) is set.
   var isWebView2 = !!(window.chrome && window.chrome.webview);
-  var ipcBaseUrl = isWebView2 ? 'https://pku-ipc.localhost/' : 'pku-ipc://localhost/';
+  var isMac = /Macintosh/.test(navigator.userAgent);
+  var ipcBaseUrl = (isWebView2 || isMac) ? 'https://pku-ipc.localhost/' : 'pku-ipc://localhost/';
 
   // ═══════════════════════════════════════════════════════════════════
   // Phase 1: canPlayType override (runs in ALL frames, including iframes)

@@ -36,13 +36,14 @@
   // We load a same-origin iframe at pku-ipc://localhost/bridge.html which
   // can make XHR to pku-ipc:// without mixed-content restrictions. The
   // parent page communicates with the iframe via postMessage.
-  // Detect WebView2 (Windows). On WebView2 the raw pku-ipc:// scheme is
-  // not intercepted for iframe requests, and mixed-content blocks XHR from
-  // HTTPS to the raw custom scheme. Tauri internally maps custom protocols
-  // to https://<scheme>.localhost/ when use_https_scheme(true) is set on
-  // the webview. We use that https:// URL for all IPC on WebView2.
+  // Detect WebView2 (Windows) and macOS WKWebView. Both block mixed-content
+  // requests from HTTPS pages to the raw pku-ipc:// custom scheme. Tauri
+  // internally maps custom protocols to https://<scheme>.localhost/ when
+  // use_https_scheme(true) is set on the webview. We use that https:// URL
+  // on Windows and macOS; Linux WebKitGTK works fine with the raw scheme.
   var isWebView2 = !!(window.chrome && window.chrome.webview);
-  var ipcBaseUrl = isWebView2 ? 'https://pku-ipc.localhost/' : 'pku-ipc://localhost/';
+  var isMac = /Macintosh/.test(navigator.userAgent);
+  var ipcBaseUrl = (isWebView2 || isMac) ? 'https://pku-ipc.localhost/' : 'pku-ipc://localhost/';
 
   var bridgeReady = false;
   var pendingQueue = [];
@@ -53,7 +54,7 @@
     bridgeIframe = document.createElement('iframe');
     bridgeIframe.id = 'pku-desktop-bridge';
     bridgeIframe.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden;';
-    bridgeIframe.src = 'pku-ipc://localhost/bridge.html';
+    bridgeIframe.src = ipcBaseUrl + 'bridge.html';
     if (document.body) {
       document.body.appendChild(bridgeIframe);
     } else {
